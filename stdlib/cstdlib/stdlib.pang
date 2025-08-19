@@ -1,0 +1,46 @@
+// Pangea Standard Library - C Standard Library Foreign Functions
+// Foreign function declarations for C stdlib.h functions
+
+// not working right now
+
+// Memory management
+export foreign fn malloc(size: i32) -> cptr void
+export foreign fn calloc(num: i32, size: i32) -> cptr void
+export foreign fn realloc(ptr: cptr void, size: i32) -> cptr void
+export foreign fn free(ptr: cptr void) -> void
+
+// Program termination
+export foreign fn exit(status: i32) -> void
+export foreign fn abort() -> void
+export foreign fn atexit(func: cptr void) -> i32
+
+// Environment
+export foreign fn getenv(name: cptr u8) -> cptr u8
+export foreign fn system(command: cptr u8) -> i32
+
+// String conversion
+export foreign fn atoi(str: cptr u8) -> i32
+export foreign fn atol(str: cptr u8) -> i64
+export foreign fn atof(str: cptr u8) -> f64
+export foreign fn strtol(str: cptr u8, endptr: cptr (cptr u8), base: i32) -> i64
+export foreign fn strtoul(str: cptr u8, endptr: cptr (cptr u8), base: i32) -> u64
+export foreign fn strtod(str: cptr u8, endptr: cptr (cptr u8)) -> f64
+
+// Random numbers
+export foreign fn rand() -> i32
+export foreign fn srand(seed: u32) -> void
+
+// Searching and sorting
+export foreign fn bsearch(key: cptr void, base: cptr void, num: i32, size: i32, compare: cptr void) -> cptr void
+export foreign fn qsort(base: cptr void, num: i32, size: i32, compare: cptr void) -> void
+
+// Integer arithmetic
+export foreign fn abs(n: i32) -> i32
+export foreign fn labs(n: i64) -> i64
+export foreign fn div(numer: i32, denom: i32) -> void  // Returns div_t struct
+export foreign fn ldiv(numer: i64, denom: i64) -> void  // Returns ldiv_t struct
+
+// Constants
+export const EXIT_SUCCESS: i32 = 0
+export const EXIT_FAILURE: i32 = 1
+export const RAND_MAX: i32 = 32767

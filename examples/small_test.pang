@@ -1,0 +1,27 @@
+import "cstdlib/stdio"
+
+
+foreign fn malloc(size: i32) -> cptr void
+foreign fn free(ptr: cptr void) -> void
+
+foreign fn memcpy(dest: cptr void, src: cptr void, size: i32) -> cptr void
+
+// Comprehensive test for Pangea language features
+fn main() -> i32 {
+    let mut file: FILE = fopen("test.txt", "w+");
+    let message = "Hello, Pangea!\n";
+    fwrite(message, 1, 15, file);
+    fclose(file);
+
+    printf("File operations completed successfully.\n");
+
+    let ptr: cptr u8 = cast<cptr u8>(malloc(100));
+    printf("pointer allocated at: %p\n", ptr);
+
+    memcpy(cast<cptr void>(ptr), "testteststesttestteststestetestetstetstestetestetsetst\0", 100);
+
+    printf("Copied string: %s\n", ptr);
+    free(cast<cptr void>(ptr));
+
+    return 0;
+}

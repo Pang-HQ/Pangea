@@ -1,0 +1,31 @@
+import "cstdlib/stdio.pang"
+
+fn run_fib(n: i32) -> i32 {
+    if n <= 1 {
+        return n
+    }
+    return run_fib(n - 1) + run_fib(n - 2)
+}
+
+fn main() -> i32 {
+    let mut n = 0
+    while n < 20 {
+        let mut suffix: string
+        let remainder = n % 10
+        if n >= 10 {
+            suffix = "th"
+        } else if remainder == 1 {
+            suffix = "st"
+        } else if remainder == 2 {
+            suffix = "nd"
+        } else if remainder == 3 {
+            suffix = "rd"
+        } else {
+            suffix = "th"
+        }
+        printf("%d%s fibonacci number is: %d\n", n, suffix, run_fib(n))
+        n++
+    }
+
+    return 0
+}

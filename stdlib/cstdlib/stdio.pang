@@ -1,0 +1,79 @@
+// Pangea Standard Library - C Standard I/O Foreign Functions
+// Foreign function declarations for C stdio.h functions
+
+// Foreign types for C FILE structure (platform-specific)
+export foreign struct _iobuf {
+    _ptr: cptr u8
+    _cnt: i32
+    _base: cptr u8
+    _flag: i32
+    _file: i32
+    _charbuf: i32
+    _bufsiz: i32
+    _tmpfname: cptr u8
+}
+
+// Type alias for FILE pointer
+export type FILE = cptr _iobuf
+
+// Core I/O functions
+export foreign fn printf(__format: cptr u8, format_args: raw_va_list) -> i32
+export foreign fn fprintf(stream: FILE, __format: cptr u8, format_args: raw_va_list) -> i32
+export foreign fn sprintf(str: cptr u8, __format: cptr u8, format_args: raw_va_list) -> i32
+export foreign fn snprintf(str: cptr u8, size: i32, __format: cptr u8, format_args: raw_va_list) -> i32
+
+export foreign fn scanf(__format: cptr u8, format_args: raw_va_list) -> i32
+export foreign fn fscanf(stream: FILE, __format: cptr u8, format_args: raw_va_list) -> i32
+export foreign fn sscanf(str: cptr u8, __format: cptr u8, format_args: raw_va_list) -> i32
+
+// File operations
+export foreign fn fopen(filename: cptr u8, mode: cptr u8) -> FILE
+export foreign fn fclose(stream: FILE) -> i32
+export foreign fn fflush(stream: FILE) -> i32
+export foreign fn freopen(filename: cptr u8, mode: cptr u8, stream: FILE) -> FILE
+
+// Character I/O
+export foreign fn fgetc(stream: FILE) -> i32
+export foreign fn getc(stream: FILE) -> i32
+export foreign fn getchar() -> i32
+export foreign fn ungetc(c: i32, stream: FILE) -> i32
+
+export foreign fn fputc(c: i32, stream: FILE) -> i32
+export foreign fn putc(c: i32, stream: FILE) -> i32
+export foreign fn putchar(c: i32) -> i32
+
+// String I/O
+export foreign fn fgets(str: cptr u8, n: i32, stream: FILE) -> cptr u8
+export foreign fn gets(str: cptr u8) -> cptr u8
+export foreign fn fputs(str: cptr u8, stream: FILE) -> i32
+export foreign fn puts(str: cptr u8) -> i32
+
+// Block I/O
+export foreign fn fread(ptr: cptr void, size: i32, count: i32, stream: FILE) -> i32
+export foreign fn fwrite(ptr: cptr void, size: i32, count: i32, stream: FILE) -> i32
+
+// File positioning
+export foreign fn fseek(stream: FILE, offset: i64, whence: i32) -> i32
+export foreign fn ftell(stream: FILE) -> i64
+export foreign fn rewind(stream: FILE) -> void
+export foreign fn fgetpos(stream: FILE, pos: cptr void) -> i32
+export foreign fn fsetpos(stream: FILE, pos: cptr void) -> i32
+
+// Error handling
+export foreign fn feof(stream: FILE) -> i32
+export foreign fn ferror(stream: FILE) -> i32
+export foreign fn clearerr(stream: FILE) -> void
+export foreign fn perror(str: cptr u8) -> void
+
+// Standard streams (extern declarations)
+export foreign const stdin: FILE
+export foreign const stdout: FILE
+export foreign const stderr: FILE
+
+// File positioning constants
+export const SEEK_SET: i32 = 0
+export const SEEK_CUR: i32 = 1
+export const SEEK_END: i32 = 2
+
+// EOF constant
+export const EOF: i32 = -1
