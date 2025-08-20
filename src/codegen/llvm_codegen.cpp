@@ -39,7 +39,9 @@ LLVMCodeGenerator::LLVMCodeGenerator(ErrorReporter* reporter, bool verbose, bool
     if (enable_builtins) {
         try {
             builtins::getBuiltinsRegistry().registerWithCodeGenerator(*this);
-            std::cout << "Built-in functions registered successfully!" << std::endl;
+            if (verbose) {
+                std::cout << "Built-in functions registered successfully!" << std::endl;
+            }
         } catch (const std::exception& e) {
             std::cerr << "Error registering built-in functions: " << e.what() << std::endl;
             throw;
@@ -74,7 +76,9 @@ void LLVMCodeGenerator::emitToString(std::string& output) {
 }
 
 bool LLVMCodeGenerator::verify() {
-    std::cout << "Starting LLVM module verification..." << std::endl;
+    if (verbose) {
+        std::cout << "Starting LLVM module verification..." << std::endl;
+    }
     
     try {
         std::string error_string;
@@ -84,13 +88,15 @@ bool LLVMCodeGenerator::verify() {
         error_stream.flush();
         
         if (verification_failed) {
-            std::cout << "Module verification failed with errors:" << std::endl;
-            std::cout << error_string << std::endl;
+            std::cerr << "Module verification failed with errors:" << std::endl;
+            std::cerr << error_string << std::endl;
             reportCodegenError(SourceLocation(), "Module verification failed: " + error_string);
             return false;
         }
         
-        std::cout << "LLVM module verification completed successfully!" << std::endl;
+        if (verbose) {
+            std::cout << "LLVM module verification completed successfully!" << std::endl;
+        }
         return true;
     } catch (const std::exception& e) {
         std::cerr << "Exception during LLVM module verification: " << e.what() << std::endl;
@@ -317,6 +323,35 @@ void LLVMCodeGenerator::visit(BinaryExpression& node) {
             case TokenType::LOGICAL_OR:
                 result = builder->CreateOr(left_bool, right_bool, "ortmp");
                 break;
+        }
+    }
+    // Handle pointer comparisons (including null comparisons)
+    else if (left_val->getType()->isPointerTy() && right_val->getType()->isPointerTy()) {
+        switch (node.operator_token) {
+            case TokenType::EQUAL:
+                result = builder->CreateICmpEQ(left_val, right_val, "cmptmp");
+                break;
+            case TokenType::NOT_EQUAL:
+                result = builder->CreateICmpNE(left_val, right_val, "cmptmp");
+                break;
+            default:
+                reportCodegenError(node.location, "Unsupported pointer comparison operator");
+                return;
+        }
+    }
+    // Handle pointer-to-null comparisons (when one operand is pointer, other is null)
+    else if ((left_val->getType()->isPointerTy() && llvm::isa<llvm::ConstantPointerNull>(right_val)) ||
+             (right_val->getType()->isPointerTy() && llvm::isa<llvm::ConstantPointerNull>(left_val))) {
+        switch (node.operator_token) {
+            case TokenType::EQUAL:
+                result = builder->CreateICmpEQ(left_val, right_val, "cmptmp");
+                break;
+            case TokenType::NOT_EQUAL:
+                result = builder->CreateICmpNE(left_val, right_val, "cmptmp");
+                break;
+            default:
+                reportCodegenError(node.location, "Unsupported pointer-to-null comparison operator");
+                return;
         }
     } else {
         reportCodegenError(node.location, "Type mismatch in binary expression");
@@ -1460,47 +1495,55 @@ std::vector<std::string> LLVMCodeGenerator::getLinkerCommands(const std::string&
     std::string safe_obj = "\"" + obj_filename + "\"";
     std::string safe_exe = "\"" + exe_filename + "\"";
     
+    // Output redirection for quiet operation
+    std::string quiet_redirect;
+    if (os == "Windows") {
+        quiet_redirect = " >nul 2>nul";
+    } else {
+        quiet_redirect = " >/dev/null 2>&1";
+    }
+    
     if (os == "Windows") {
         // Windows linker options in order of preference
         // 1. Clang (most compatible with LLVM) - link with MSVCRT for printf, math functions
-        commands.push_back("clang -o " + safe_exe + " " + safe_obj + " -lmsvcrt");
+        commands.push_back("clang -o " + safe_exe + " " + safe_obj + " -lmsvcrt" + quiet_redirect);
         
         // 2. GCC (MinGW) - link with standard C library and math library
-        commands.push_back("gcc -o " + safe_exe + " " + safe_obj + " -lm -lmsvcrt");
-        commands.push_back("x86_64-w64-mingw32-gcc -o " + safe_exe + " " + safe_obj + " -lm");
+        commands.push_back("gcc -o " + safe_exe + " " + safe_obj + " -lm -lmsvcrt" + quiet_redirect);
+        commands.push_back("x86_64-w64-mingw32-gcc -o " + safe_exe + " " + safe_obj + " -lm" + quiet_redirect);
         
         // 3. Clang-cl (MSVC-compatible interface)
-        commands.push_back("clang-cl /Fe:" + safe_exe + " " + safe_obj + " msvcrt.lib legacy_stdio_definitions.lib");
+        commands.push_back("clang-cl /Fe:" + safe_exe + " " + safe_obj + " msvcrt.lib legacy_stdio_definitions.lib" + quiet_redirect);
         
         // 4. Microsoft linker (if available)
-        commands.push_back("link.exe /OUT:" + safe_exe + " " + safe_obj + " /SUBSYSTEM:CONSOLE msvcrt.lib legacy_stdio_definitions.lib");
+        commands.push_back("link.exe /OUT:" + safe_exe + " " + safe_obj + " /SUBSYSTEM:CONSOLE msvcrt.lib legacy_stdio_definitions.lib" + quiet_redirect);
         
     } else if (os == "Linux") {
         // Linux linker options
         // 1. Clang (preferred for LLVM compatibility)
-        commands.push_back("clang -o " + safe_exe + " " + safe_obj + " -lm -lpthread");
+        commands.push_back("clang -o " + safe_exe + " " + safe_obj + " -lm -lpthread" + quiet_redirect);
         
         // 2. GCC
-        commands.push_back("gcc -o " + safe_exe + " " + safe_obj + " -lm -lpthread");
+        commands.push_back("gcc -o " + safe_exe + " " + safe_obj + " -lm -lpthread" + quiet_redirect);
         
         // 3. Alternative clang names
-        commands.push_back("clang-15 -o " + safe_exe + " " + safe_obj + " -lm -lpthread");
-        commands.push_back("clang-14 -o " + safe_exe + " " + safe_obj + " -lm -lpthread");
+        commands.push_back("clang-15 -o " + safe_exe + " " + safe_obj + " -lm -lpthread" + quiet_redirect);
+        commands.push_back("clang-14 -o " + safe_exe + " " + safe_obj + " -lm -lpthread" + quiet_redirect);
         
     } else if (os == "macOS") {
         // macOS linker options
         // 1. Clang (standard on macOS)
-        commands.push_back("clang -o " + safe_exe + " " + safe_obj);
+        commands.push_back("clang -o " + safe_exe + " " + safe_obj + quiet_redirect);
         
         // 2. GCC (if installed via Homebrew)
-        commands.push_back("gcc -o " + safe_exe + " " + safe_obj);
-        commands.push_back("gcc-13 -o " + safe_exe + " " + safe_obj);
-        commands.push_back("gcc-12 -o " + safe_exe + " " + safe_obj);
+        commands.push_back("gcc -o " + safe_exe + " " + safe_obj + quiet_redirect);
+        commands.push_back("gcc-13 -o " + safe_exe + " " + safe_obj + quiet_redirect);
+        commands.push_back("gcc-12 -o " + safe_exe + " " + safe_obj + quiet_redirect);
         
     } else {
         // Generic Unix-like system
-        commands.push_back("clang -o " + safe_exe + " " + safe_obj + " -lm");
-        commands.push_back("gcc -o " + safe_exe + " " + safe_obj + " -lm");
+        commands.push_back("clang -o " + safe_exe + " " + safe_obj + " -lm" + quiet_redirect);
+        commands.push_back("gcc -o " + safe_exe + " " + safe_obj + " -lm" + quiet_redirect);
     }
     
     return commands;
