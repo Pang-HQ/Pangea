@@ -31,6 +31,7 @@ private:
     bool match(std::initializer_list<TokenType> types);
     Token consume(TokenType type, const std::string& message);
     void synchronize();
+    void synchronizeStatement();
     void reportError(const std::string& message);
     
     // Parsing methods

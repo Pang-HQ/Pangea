@@ -50,6 +50,11 @@ void Parser::skipNewlines() {
 void Parser::consumeOptionalSemicolon() {
     if (check(TokenType::SEMICOLON)) {
         advance();
+        // Check for extra semicolons (common error)
+        while (check(TokenType::SEMICOLON)) {
+            reportError("Unexpected extra semicolon");
+            advance();
+        }
     } else if (check(TokenType::NEWLINE) || check(TokenType::RIGHT_BRACE) || isAtEnd()) {
         // Newline, closing brace, or EOF acts as statement terminator
         return;
@@ -108,6 +113,44 @@ void Parser::synchronize() {
             case TokenType::IF:
             case TokenType::WHILE:
             case TokenType::RETURN:
+            case TokenType::CONST:
+            case TokenType::IMPORT:
+            case TokenType::STRUCT:
+            case TokenType::ENUM:
+            case TokenType::FOREIGN:
+            case TokenType::TYPE:
+                return;
+            default:
+                break;
+        }
+        
+        advance();
+    }
+}
+
+void Parser::synchronizeStatement() {
+    // Skip tokens until we find a statement boundary within a function body
+    while (!isAtEnd() && !check(TokenType::RIGHT_BRACE)) {
+        // If we find a semicolon, we can start parsing the next statement
+        if (check(TokenType::SEMICOLON)) {
+            advance(); // consume the semicolon
+            return;
+        }
+        
+        // If we find a newline, that's also a statement boundary
+        if (check(TokenType::NEWLINE)) {
+            return; // don't consume the newline, let skipNewlines handle it
+        }
+        
+        // If we find tokens that typically start statements, stop here
+        switch (peek().type) {
+            case TokenType::LET:
+            case TokenType::CONST:
+            case TokenType::IF:
+            case TokenType::WHILE:
+            case TokenType::FOR:
+            case TokenType::RETURN:
+            case TokenType::LEFT_BRACE:
                 return;
             default:
                 break;
@@ -266,23 +309,25 @@ std::unique_ptr<BlockStatement> Parser::parseBlockStatement() {
         skipNewlines();
         if (check(TokenType::RIGHT_BRACE) || isAtEnd()) break;
         
-        std::unique_ptr<Statement> stmt = nullptr;
-        
-        // Check if it's a variable declaration
-        if (check(TokenType::LET) || check(TokenType::CONST)) {
-            if (auto decl = parseDeclaration()) {
-                // Wrap declaration in DeclarationStatement
-                stmt = std::make_unique<DeclarationStatement>(decl->location, std::move(decl));
+        try {
+            std::unique_ptr<Statement> stmt = nullptr;
+            
+            // Check if it's a variable declaration
+            if (check(TokenType::LET) || check(TokenType::CONST)) {
+                if (auto decl = parseDeclaration()) {
+                    // Wrap declaration in DeclarationStatement
+                    stmt = std::make_unique<DeclarationStatement>(decl->location, std::move(decl));
+                }
+            } else {
+                stmt = parseStatement();
             }
-        } else {
-            stmt = parseStatement();
-        }
-        
-        if (stmt) {
-            block->statements.push_back(std::move(stmt));
-        } else {
-            // If we can't parse a statement, advance to avoid infinite loop
-            advance();
+            
+            if (stmt) {
+                block->statements.push_back(std::move(stmt));
+            }
+        } catch (const std::runtime_error&) {
+            // Error recovery: synchronize to next statement boundary
+            synchronizeStatement();
         }
     }
     
