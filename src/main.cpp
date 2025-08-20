@@ -235,7 +235,8 @@ void printUsage(const char* program_name) {
     std::cout << "Usage: " << program_name << " [options] <input_file>" << std::endl;
     std::cout << "Options:" << std::endl;
     std::cout << "  -o <file>     Specify output file (default: a.exe)" << std::endl;
-    std::cout << "  --verbose     Outputs full logs on compilation" << std::endl;
+    std::cout << "  -v, --verbose Enable verbose output (show all compilation steps)" << std::endl;
+    std::cout << "  --color=MODE  Control colored output (always|auto|never, default: auto)" << std::endl;
     std::cout << "  --llvm        Output LLVM IR instead of executable" << std::endl;
     std::cout << "  --tokens      Print tokens and exit" << std::endl;
     std::cout << "  --ast         Print AST and exit" << std::endl;
@@ -256,6 +257,7 @@ int main(int argc, char* argv[]) {
     bool verbose = false;
     bool no_stdlib = false;
     bool no_builtins = false;
+    std::string color_mode = "auto";
     std::string input_file;
     std::string output_file("a.exe");
     
@@ -279,8 +281,14 @@ int main(int argc, char* argv[]) {
             print_tokens = true;
         } else if (arg == "--ast") {
             print_ast = true;
-        } else if (arg == "--verbose") {
+        } else if (arg == "-v" || arg == "--verbose") {
             verbose = true;  
+        } else if (arg.starts_with("--color=")) {
+            color_mode = arg.substr(8);
+            if (color_mode != "always" && color_mode != "auto" && color_mode != "never") {
+                std::cerr << "Error: Invalid color mode '" << color_mode << "'. Use always, auto, or never." << std::endl;
+                return 1;
+            }
         } else if (arg == "--no-stdlib") {
             no_stdlib = true;
         } else if (arg == "--no-builtins") {
@@ -299,8 +307,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     
-    // Initialize error reporter
-    ErrorReporter error_reporter;
+    // Initialize error reporter with color support
+    ErrorReporter error_reporter(color_mode);
     
     // Create module manager for separate compilation
     ModuleManager module_manager(&error_reporter, verbose);
@@ -393,10 +401,9 @@ int main(int argc, char* argv[]) {
     } else {
         // Compile to executable
         if (codegen.compileToExecutable(output_file)) {
-            std::cout << "Compilation successful! Executable created: " << output_file << std::endl;
+            std::cout << "Compiled successfully: " << output_file << std::endl;
         } else {
-            std::cerr << "Failed to compile to executable" << std::endl;
-            return 1;
+            return 1; // Error messages already printed by codegen
         }
     }
     
