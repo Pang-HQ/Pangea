@@ -6,22 +6,40 @@ foreign fn free(ptr: cptr void) -> void
 
 foreign fn memcpy(dest: cptr void, src: cptr void, size: i32) -> cptr void
 
+foreign fn atoi(str: cptr u8) -> i32
+
+foreign fn strcmp(str1: cptr u8, str2: cptr u8) -> i32
+
 // Comprehensive test for Pangea language features
 fn main() -> i32 {
-    let mut file: FILE = fopen("test.txt", "w+");
-    let message = "Hello, Pangea!\n";
-    fwrite(message, 1, 15, file);
-    fclose(file);
+    let mut file: FILE = fopen("test.txt", "w+")
+    let message = "Hello, Pangea!\n"
+    fwrite(message, 1, 15, file)
+    fclose(file)
 
-    printf("File operations completed successfully.\n");
+    printf("File operations completed successfully.\n")
 
-    let ptr: cptr u8 = cast<cptr u8>(malloc(100));
-    printf("pointer allocated at: %p\n", ptr);
+    let ptr: cptr u8 = cast<cptr u8>(malloc(100))
 
-    memcpy(cast<cptr void>(ptr), "testteststesttestteststestetestetstetstestetestetsetst\0", 100);
+    if ptr == null {
+        printf("Memory allocation failed.\n")
+        return 1
+    }
 
-    printf("Copied string: %s\n", ptr);
-    free(cast<cptr void>(ptr));
+    printf("abc: %d\n", atoi("12345"))
 
-    return 0;
+    printf("pointer allocated at: %p\n", ptr)
+
+    memcpy(cast<cptr void>(ptr), "testteststesttestteststestetestetstetstestetestetsetst\0", 100)
+
+    if (strcmp(ptr, "asd") == 0) {
+        printf("Strings are equal.\n")
+    } else {
+        printf("Strings are not equal.\n")
+    }
+
+    printf("Copied string: %s\n", ptr)
+    free(cast<cptr void>(ptr))
+
+    return 0
 }
