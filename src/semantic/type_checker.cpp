@@ -222,6 +222,7 @@ void TypeChecker::visit(BinaryExpression& node) {
         return;
     }
     
+    
     std::unique_ptr<SemanticType> result_type;
     
     switch (node.operator_token) {
@@ -259,7 +260,10 @@ void TypeChecker::visit(BinaryExpression& node) {
         case TokenType::LESS_EQUAL:
         case TokenType::GREATER:
         case TokenType::GREATER_EQUAL:
-            if (left_type->isCompatibleWith(*right_type)) {
+            if (isNullComparison(*left_type, *right_type)) {
+                // Allow comparison between pointer types and null
+                result_type = SemanticType::createPrimitive("bool");
+            } else if (left_type->isCompatibleWith(*right_type)) {
                 result_type = SemanticType::createPrimitive("bool");
             } else {
                 reportTypeError(node.location, "Cannot compare incompatible types");
@@ -1238,6 +1242,17 @@ bool TypeChecker::isTypeCompatibleWithParameter(const SemanticType& arg_type, co
     }
     
     return false;
+}
+
+bool TypeChecker::isNullComparison(const SemanticType& left_type, const SemanticType& right_type) const {
+    // Check if one operand is a pointer type and the other is null
+    bool left_is_pointer = (left_type.kind == SemanticType::Kind::POINTER);
+    bool right_is_pointer = (right_type.kind == SemanticType::Kind::POINTER);
+    bool left_is_null = (left_type.kind == SemanticType::Kind::PRIMITIVE && left_type.name == "null");
+    bool right_is_null = (right_type.kind == SemanticType::Kind::PRIMITIVE && right_type.name == "null");
+    
+    // Allow comparison if one side is a pointer and the other is null
+    return (left_is_pointer && right_is_null) || (right_is_pointer && left_is_null);
 }
 
 } // namespace pangea

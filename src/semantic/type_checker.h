@@ -183,6 +183,9 @@ public:
     bool isForeignVariadicFunction(const std::string& name) const;
     bool isVariadicCompatible(const SemanticType& type) const;
     bool isTypeCompatibleWithParameter(const SemanticType& arg_type, const SemanticType& param_type) const;
+    
+    // Null comparison support
+    bool isNullComparison(const SemanticType& left_type, const SemanticType& right_type) const;
 };
 
 } // namespace pangea
