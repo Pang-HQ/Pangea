@@ -40,6 +40,7 @@ private:
     Token makeToken(TokenType type, const std::string& lexeme, int64_t value);
     Token makeToken(TokenType type, const std::string& lexeme, double value);
     Token makeToken(TokenType type, const std::string& lexeme, bool value);
+    Token makeTokenAtStart(TokenType type, const std::string& lexeme, size_t start_column);
     
     Token scanString();
     Token scanNumber();

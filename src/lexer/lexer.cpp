@@ -2,6 +2,9 @@
 #include <cctype>
 #include <stdexcept>
 
+// NOTE: Character position tracking in the lexer is somewhat buggy,
+// this is a known issue and will be fixed in a future release.
+
 namespace pangea {
 
 Lexer::Lexer(const std::string& source_code, const std::string& file, ErrorReporter* reporter)
@@ -25,76 +28,78 @@ Token Lexer::nextToken() {
         return makeToken(TokenType::EOF_TOKEN);
     }
     
+    // Store the start position and location before advancing
     size_t start = current;
+    size_t start_column = column;
     char c = advance();
     
     // Single character tokens
     switch (c) {
-        case '(': return makeToken(TokenType::LEFT_PAREN, "(");
-        case ')': return makeToken(TokenType::RIGHT_PAREN, ")");
-        case '{': return makeToken(TokenType::LEFT_BRACE, "{");
-        case '}': return makeToken(TokenType::RIGHT_BRACE, "}");
-        case '[': return makeToken(TokenType::LEFT_BRACKET, "[");
-        case ']': return makeToken(TokenType::RIGHT_BRACKET, "]");
-        case ',': return makeToken(TokenType::COMMA, ",");
-        case ';': return makeToken(TokenType::SEMICOLON, ";");
-        case '?': return makeToken(TokenType::QUESTION, "?");
-        case '~': return makeToken(TokenType::BITWISE_NOT, "~");
-        case '^': return makeToken(TokenType::BITWISE_XOR, "^");
+        case '(': return makeTokenAtStart(TokenType::LEFT_PAREN, "(", start_column);
+        case ')': return makeTokenAtStart(TokenType::RIGHT_PAREN, ")", start_column);
+        case '{': return makeTokenAtStart(TokenType::LEFT_BRACE, "{", start_column);
+        case '}': return makeTokenAtStart(TokenType::RIGHT_BRACE, "}", start_column);
+        case '[': return makeTokenAtStart(TokenType::LEFT_BRACKET, "[", start_column);
+        case ']': return makeTokenAtStart(TokenType::RIGHT_BRACKET, "]", start_column);
+        case ',': return makeTokenAtStart(TokenType::COMMA, ",", start_column);
+        case ';': return makeTokenAtStart(TokenType::SEMICOLON, ";", start_column);
+        case '?': return makeTokenAtStart(TokenType::QUESTION, "?", start_column);
+        case '~': return makeTokenAtStart(TokenType::BITWISE_NOT, "~", start_column);
+        case '^': return makeTokenAtStart(TokenType::BITWISE_XOR, "^", start_column);
         case '%':
-            if (match('=')) return makeToken(TokenType::MODULO_ASSIGN, "%=");
-            return makeToken(TokenType::MODULO, "%");
+            if (match('=')) return makeTokenAtStart(TokenType::MODULO_ASSIGN, "%=", start_column);
+            return makeTokenAtStart(TokenType::MODULO, "%", start_column);
     }
     
     // Two character tokens and operators
     switch (c) {
         case '+':
-            if (match('=')) return makeToken(TokenType::PLUS_ASSIGN, "+=");
-            if (match('+')) return makeToken(TokenType::INCREMENT, "++");
-            return makeToken(TokenType::PLUS, "+");
+            if (match('=')) return makeTokenAtStart(TokenType::PLUS_ASSIGN, "+=", start_column);
+            if (match('+')) return makeTokenAtStart(TokenType::INCREMENT, "++", start_column);
+            return makeTokenAtStart(TokenType::PLUS, "+", start_column);
         case '-':
-            if (match('=')) return makeToken(TokenType::MINUS_ASSIGN, "-=");
-            if (match('-')) return makeToken(TokenType::DECREMENT, "--");
-            if (match('>')) return makeToken(TokenType::ARROW, "->");
-            return makeToken(TokenType::MINUS, "-");
+            if (match('=')) return makeTokenAtStart(TokenType::MINUS_ASSIGN, "-=", start_column);
+            if (match('-')) return makeTokenAtStart(TokenType::DECREMENT, "--", start_column);
+            if (match('>')) return makeTokenAtStart(TokenType::ARROW, "->", start_column);
+            return makeTokenAtStart(TokenType::MINUS, "-", start_column);
         case '*':
-            if (match('=')) return makeToken(TokenType::MULTIPLY_ASSIGN, "*=");
-            if (match('*')) return makeToken(TokenType::POWER, "**");
-            return makeToken(TokenType::MULTIPLY, "*");
+            if (match('=')) return makeTokenAtStart(TokenType::MULTIPLY_ASSIGN, "*=", start_column);
+            if (match('*')) return makeTokenAtStart(TokenType::POWER, "**", start_column);
+            return makeTokenAtStart(TokenType::MULTIPLY, "*", start_column);
         case '/':
-            if (match('=')) return makeToken(TokenType::DIVIDE_ASSIGN, "/=");
+            if (match('=')) return makeTokenAtStart(TokenType::DIVIDE_ASSIGN, "/=", start_column);
             if (match('/')) {
                 return skipLineComment();
             }
             if (match('*')) {
                 return skipBlockComment();
             }
-            return makeToken(TokenType::DIVIDE, "/");
+            return makeTokenAtStart(TokenType::DIVIDE, "/", start_column);
         case '!':
-            if (match('=')) return makeToken(TokenType::NOT_EQUAL, "!=");
-            return makeToken(TokenType::LOGICAL_NOT, "!");
+            if (match('=')) return makeTokenAtStart(TokenType::NOT_EQUAL, "!=", start_column);
+            return makeTokenAtStart(TokenType::LOGICAL_NOT, "!", start_column);
         case '=':
-            if (match('=')) return makeToken(TokenType::EQUAL, "==");
-            return makeToken(TokenType::ASSIGN, "=");
+            if (match('=')) return makeTokenAtStart(TokenType::EQUAL, "==", start_column);
+            return makeTokenAtStart(TokenType::ASSIGN, "=", start_column);
         case '<':
-            if (match('=')) return makeToken(TokenType::LESS_EQUAL, "<=");
-            if (match('<')) return makeToken(TokenType::BITWISE_LEFT_SHIFT, "<<");
-            return makeToken(TokenType::LESS, "<");
+            if (match('=')) return makeTokenAtStart(TokenType::LESS_EQUAL, "<=", start_column);
+            if (match('<')) return makeTokenAtStart(TokenType::BITWISE_LEFT_SHIFT, "<<", start_column);
+            return makeTokenAtStart(TokenType::LESS, "<", start_column);
         case '>':
-            if (match('=')) return makeToken(TokenType::GREATER_EQUAL, ">=");
-            if (match('>')) return makeToken(TokenType::BITWISE_RIGHT_SHIFT, ">>");
-            return makeToken(TokenType::GREATER, ">");
+            if (match('=')) return makeTokenAtStart(TokenType::GREATER_EQUAL, ">=", start_column);
+            if (match('>')) return makeTokenAtStart(TokenType::BITWISE_RIGHT_SHIFT, ">>", start_column);
+            return makeTokenAtStart(TokenType::GREATER, ">", start_column);
         case '&':
-            if (match('&')) return makeToken(TokenType::LOGICAL_AND, "&&");
-            return makeToken(TokenType::BITWISE_AND, "&");
+            if (match('&')) return makeTokenAtStart(TokenType::LOGICAL_AND, "&&", start_column);
+            return makeTokenAtStart(TokenType::BITWISE_AND, "&", start_column);
         case '|':
-            if (match('|')) return makeToken(TokenType::LOGICAL_OR, "||");
-            return makeToken(TokenType::BITWISE_OR, "|");
+            if (match('|')) return makeTokenAtStart(TokenType::LOGICAL_OR, "||", start_column);
+            return makeTokenAtStart(TokenType::BITWISE_OR, "|", start_column);
         case ':':
-            if (match(':')) return makeToken(TokenType::SCOPE_RESOLUTION, "::");
-            return makeToken(TokenType::COLON, ":");
+            if (match(':')) return makeTokenAtStart(TokenType::SCOPE_RESOLUTION, "::", start_column);
+            return makeTokenAtStart(TokenType::COLON, ":", start_column);
         case '.':
-            return makeToken(TokenType::MEMBER_ACCESS, ".");
+            return makeTokenAtStart(TokenType::MEMBER_ACCESS, ".", start_column);
     }
     
     // String literals
@@ -211,6 +216,13 @@ Token Lexer::makeToken(TokenType type, const std::string& lexeme, double value) 
 
 Token Lexer::makeToken(TokenType type, const std::string& lexeme, bool value) {
     return Token(type, lexeme, getCurrentLocation(), value);
+}
+
+Token Lexer::makeTokenAtStart(TokenType type, const std::string& lexeme, size_t start_column) {
+    // Calculate the actual start position in the source
+    size_t start_pos = current - lexeme.length();
+    SourceLocation loc(filename, line, start_column, start_pos);
+    return Token(type, lexeme, loc);
 }
 
 Token Lexer::scanString() {
