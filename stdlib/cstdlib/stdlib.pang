@@ -1,8 +1,6 @@
 // Pangea Standard Library - C Standard Library Foreign Functions
 // Foreign function declarations for C stdlib.h functions
 
-// not working right now
-
 // Memory management
 export foreign fn malloc(size: i32) -> cptr void
 export foreign fn calloc(num: i32, size: i32) -> cptr void
@@ -22,9 +20,9 @@ export foreign fn system(command: cptr u8) -> i32
 export foreign fn atoi(str: cptr u8) -> i32
 export foreign fn atol(str: cptr u8) -> i64
 export foreign fn atof(str: cptr u8) -> f64
-export foreign fn strtol(str: cptr u8, endptr: cptr (cptr u8), base: i32) -> i64
-export foreign fn strtoul(str: cptr u8, endptr: cptr (cptr u8), base: i32) -> u64
-export foreign fn strtod(str: cptr u8, endptr: cptr (cptr u8)) -> f64
+export foreign fn strtol(str: cptr u8, endptr: cptr cptr u8, base: i32) -> i64
+export foreign fn strtoul(str: cptr u8, endptr: cptr cptr u8, base: i32) -> u64
+export foreign fn strtod(str: cptr u8, endptr: cptr cptr u8) -> f64
 
 // Random numbers
 export foreign fn rand() -> i32
