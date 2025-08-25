@@ -369,6 +369,11 @@ int main(int argc, char* argv[]) {
     
     type_checker.analyze(*program);
 
+    if (error_reporter.hasErrors()) {
+        error_reporter.printDiagnostics();
+        return 1;
+    }
+
     if (verbose)
     {
         std::cout << "[VERBOSE] Generating LLVM IR..." << std::endl;
