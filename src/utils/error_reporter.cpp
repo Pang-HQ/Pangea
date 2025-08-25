@@ -137,20 +137,25 @@ void ErrorReporter::printDiagnostics() const {
                 // Read to the error line
                 while (std::getline(file, line) && current_line <= diagnostic.location.line) {
                     if (current_line == diagnostic.location.line) {
-                        // Show the line with error
-                        std::cerr << colorize("   |", "blue") << std::endl;
-                        std::cerr << colorize(std::to_string(current_line) + " |", "blue") << " " << line << std::endl;
+                        // Calculate consistent spacing for line numbers
+                        std::string line_num_str = std::to_string(current_line);
+                        size_t max_line_width = std::max(line_num_str.length(), size_t(3)); // minimum 3 chars
+                        std::string padding(max_line_width - line_num_str.length(), ' ');
                         
-                        // Show pointer to error location
-                        std::string pointer_line = "   " + colorize("|", "blue") + " ";
+                        // Show the line with error with consistent alignment
+                        std::cerr << colorize(std::string(max_line_width, ' ') + " |", "blue") << std::endl;
+                        std::cerr << colorize(padding + line_num_str + " |", "blue") << " " << line << std::endl;
+                        
+                        // Show pointer to error location with consistent margin
+                        std::string pointer_line = colorize(std::string(max_line_width, ' ') + " |", "blue") + " ";
                         for (size_t i = 1; i < diagnostic.location.column; ++i) {
                             pointer_line += " ";
                         }
                         
-                        // Use token lexeme length for multi-character underlining
-                        if (!diagnostic.token_lexeme.empty() && diagnostic.token_lexeme.length() > 1) {
+                        // Use location length for multi-character underlining
+                        if (diagnostic.location.length > 1) {
                             pointer_line += colorize("^", "red");
-                            for (size_t i = 1; i < diagnostic.token_lexeme.length(); ++i) {
+                            for (size_t i = 1; i < diagnostic.location.length; ++i) {
                                 pointer_line += colorize("~", "red");
                             }
                         } else {
@@ -216,10 +221,10 @@ void ErrorReporter::printDiagnosticWithContext(const DiagnosticMessage& diagnost
                     pointer_line += " ";
                 }
                 
-                // Use token lexeme length for multi-character underlining
-                if (!diagnostic.token_lexeme.empty() && diagnostic.token_lexeme.length() > 1) {
+                // Use location length for multi-character underlining
+                if (diagnostic.location.length > 1) {
                     pointer_line += colorize("^", "red");
-                    for (size_t i = 1; i < diagnostic.token_lexeme.length(); ++i) {
+                    for (size_t i = 1; i < diagnostic.location.length; ++i) {
                         pointer_line += colorize("~", "red");
                     }
                 } else {
