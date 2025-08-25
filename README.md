@@ -6,7 +6,7 @@ Pangea is a modern, statically typed, compiled programming language designed for
 
 ```bash
 # Clone the repository
-git clone github.com/Pang-Dev/Pangea
+git clone github.com/Pang-HQ/Pangea
 cd Pangea
 
 # Build the compiler
