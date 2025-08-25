@@ -64,6 +64,9 @@ struct Token {
         bool bool_value;
     };
     
+    // For string literals - stores the processed/escaped string value
+    std::string string_value;
+    
     Token(TokenType t, const std::string& lex, const SourceLocation& loc)
         : type(t), lexeme(lex), location(loc), int_value(0) {}
     
@@ -75,6 +78,10 @@ struct Token {
     
     Token(TokenType t, const std::string& lex, const SourceLocation& loc, bool value)
         : type(t), lexeme(lex), location(loc), bool_value(value) {}
+    
+    // Constructor for string literals with processed value
+    Token(TokenType t, const std::string& lex, const SourceLocation& loc, const std::string& str_value)
+        : type(t), lexeme(lex), location(loc), int_value(0), string_value(str_value) {}
     
     std::string toString() const;
 };
