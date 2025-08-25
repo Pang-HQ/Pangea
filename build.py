@@ -65,9 +65,9 @@ def main():
 
     # Compiler flags based on build type
     if build_type == "Debug":
-        compile_flags = ["-g", "-std=c++20"] #, "-Wall", "-Wextra", "-Wpedantic"]
+        compile_flags = ["-g", "-std=c++20", "-Wall", "-Wextra", "-Wpedantic"]
     else:
-        compile_flags = ["-O2", "-std=c++20"] #, "-Wall", "-Wextra", "-Wpedantic"]
+        compile_flags = ["-O2", "-std=c++20", "-Wall", "-Wextra", "-Wpedantic"]
 
     # Add memory check flag if enabled
     if memory_check == "ON":
@@ -101,6 +101,8 @@ def main():
         "../src/builtins/builtins.cpp",
         "../src/stdlib/platform/file_system.cpp",
         "../src/utils/source_location.cpp",
+        "../src/utils/unicode/unicode_escape.cpp",
+        "../src/utils/unicode/unicode_escape.h",
         "../src/utils/error_reporter.cpp"
     ]
 
