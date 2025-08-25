@@ -138,8 +138,8 @@ void LLVMCodeGenerator::visit(LiteralExpression& node) {
             break;
             
         case TokenType::STRING_LITERAL:
-            // Create a global string constant
-            value = builder->CreateGlobalStringPtr(node.literal_token.lexeme);
+            // Create a global string constant using the processed string value
+            value = builder->CreateGlobalStringPtr(node.literal_token.string_value);
             break;
             
         case TokenType::NULL_LITERAL:
