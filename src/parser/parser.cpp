@@ -25,10 +25,8 @@ std::unique_ptr<Program> Parser::parseProgram() {
                 main_module->declarations.push_back(std::move(decl));
             }
         } else {
-            // If parsing failed, advance to next token to avoid infinite loop
-            if (!isAtEnd()) {
-                advance();
-            }
+            // If parsing failed, synchronize should already have skipped to the next statement
+            // so no need to do anything here :D
         }
     }
     
@@ -104,7 +102,7 @@ void Parser::synchronize() {
     
     while (!isAtEnd()) {
         if (previous().type == TokenType::SEMICOLON) return;
-        
+
         switch (peek().type) {
             case TokenType::CLASS:
             case TokenType::FN:
@@ -256,10 +254,20 @@ std::unique_ptr<FunctionDeclaration> Parser::parseFunctionDeclaration() {
     consume(TokenType::LEFT_PAREN, "Expected '(' after function name");
     std::vector<Parameter> parameters = parseParameterList();
     consume(TokenType::RIGHT_PAREN, "Expected ')' after parameters");
+
+    std::unique_ptr<Type> return_type;
+    if (!match({TokenType::ARROW}))
+    {
+        error_reporter->reportError(previous().location, "Function return type inference not yet implemented, defaulting to void.", true);
+        return_type = std::make_unique<PrimitiveType>(previous().location, TokenType::VOID);
+    }
+    else
+    {
+        return_type = parseType();
+    }
     
-    consume(TokenType::ARROW, "Expected '->' after parameters");
-    auto return_type = parseType();
-    
+    while (match({TokenType::NEWLINE}));
+
     consume(TokenType::LEFT_BRACE, "Expected '{' before function body");
     auto body = parseBlockStatement();
     
@@ -679,7 +687,6 @@ std::unique_ptr<Type> Parser::parsePrimitiveType() {
         } else {
             // Simple identifier type (user-defined type)
             // For now, treat as a primitive type with the identifier name
-            // In a full implementation, this would be resolved during semantic analysis
             return std::make_unique<PrimitiveType>(type_name.location, TokenType::IDENTIFIER);
         }
     }
@@ -707,13 +714,27 @@ std::unique_ptr<Type> Parser::parsePointerType() {
 // Parameter and argument parsing
 std::vector<Parameter> Parser::parseParameterList() {
     std::vector<Parameter> parameters;
-    
-    if (!check(TokenType::RIGHT_PAREN)) {
-        do {
-            parameters.push_back(parseParameter());
-        } while (match({TokenType::COMMA}));
+    skipNewlines();
+
+    if (check(TokenType::RIGHT_PAREN))
+        return parameters; // empty parameter list
+
+    while (!check(TokenType::EOF_TOKEN)) {
+        parameters.push_back(parseParameter());
+
+        if (check(TokenType::RIGHT_PAREN))
+            break;
+        
+        consume(TokenType::COMMA, "Expected ',' after parameter");
+        skipNewlines();
     }
-    
+
+    if (check(TokenType::EOF_TOKEN))
+    {
+        error_reporter->reportError(peek().location, "Expected ')' to close parameter list, but reached end of file");
+        throw std::runtime_error("Expected ')' to close parameter list");
+    }
+
     return parameters;
 }
 
@@ -734,11 +755,26 @@ Parameter Parser::parseParameter() {
 
 std::vector<std::unique_ptr<Expression>> Parser::parseArgumentList() {
     std::vector<std::unique_ptr<Expression>> arguments;
+    skipNewlines();
+
+    if (check(TokenType::RIGHT_PAREN))
+        return arguments; // empty argument list
+
     
-    if (!check(TokenType::RIGHT_PAREN)) {
-        do {
-            arguments.push_back(parseExpression());
-        } while (match({TokenType::COMMA}));
+    while (!check(TokenType::EOF_TOKEN)) {
+        arguments.push_back(parseExpression());
+
+        if (check(TokenType::RIGHT_PAREN))
+            break;
+
+        consume(TokenType::COMMA, "Expected ',' after argument");
+        skipNewlines();
+    }
+
+    if (check(TokenType::EOF_TOKEN))
+    {
+        error_reporter->reportError(peek().location, "Expected ')' to close argument list, but reached end of file");
+        throw std::runtime_error("Expected ')' to close argument list");
     }
     
     return arguments;
