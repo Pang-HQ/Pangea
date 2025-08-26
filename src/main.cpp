@@ -93,6 +93,7 @@ public:
         // Read and parse the module
         std::string source = readFile(file_path);
         if (source.empty()) {
+            // TODO: warn if the file is empty, but still allow program to continue running
             loading_modules.erase(module_path);
             return nullptr;
         }
@@ -102,6 +103,7 @@ public:
         auto tokens = lexer.tokenize();
 
         if (error_reporter->hasErrors()) {
+            error_reporter->printDiagnostics();
             loading_modules.erase(module_path);
             return nullptr;
         }
@@ -111,6 +113,7 @@ public:
         auto program = parser.parseProgram();
 
         if (error_reporter->hasErrors()) {
+            error_reporter->printDiagnostics();
             loading_modules.erase(module_path);
             return nullptr;
         }
@@ -147,6 +150,7 @@ public:
         // Read and parse main file
         std::string source = readFile(main_file);
         if (source.empty()) {
+            std::cerr << "Error: Main file is empty or could not be read: " << main_file << std::endl;
             return nullptr;
         }
 
@@ -155,6 +159,7 @@ public:
         auto tokens = lexer.tokenize();
 
         if (error_reporter->hasErrors()) {
+            error_reporter->printDiagnostics();
             return nullptr;
         }
 
@@ -163,6 +168,7 @@ public:
         auto main_program = parser.parseProgram();
 
         if (error_reporter->hasErrors()) {
+            error_reporter->printDiagnostics();
             return nullptr;
         }
 
@@ -173,7 +179,7 @@ public:
 
         // Auto-import standard library modules if enabled
         if (auto_import_stdlib) {
-            std::vector<std::string> stdlib_modules = {"io"};
+            std::vector<std::string> stdlib_modules = {};
             
             for (const auto& stdlib_module : stdlib_modules) {
                 if (verbose) {
