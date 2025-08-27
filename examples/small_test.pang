@@ -1,14 +1,14 @@
 import "cstdlib/stdio"
 
 
-foreign fn malloc(size: i32) -> cptr void
-foreign fn free(ptr: cptr void) -> void
+foreign fn malloc(size: i32) -> cptr<void>
+foreign fn free(ptr: cptr<void>) -> void
 
-foreign fn memcpy(dest: cptr void, src: cptr void, size: i32) -> cptr void
+foreign fn memcpy(dest: cptr<void>, src: cptr<void>, size: i32) -> cptr<void>
 
-foreign fn atoi(str: cptr u8) -> i32
+foreign fn atoi(str: cptr<u8>) -> i32
 
-foreign fn strcmp(str1: cptr u8, str2: cptr u8) -> i32
+foreign fn strcmp(str1: cptr<u8>, str2: cptr<u8>) -> i32
 
 // Comprehensive test for Pangea language features
 fn main() -> i32 {
@@ -19,7 +19,7 @@ fn main() -> i32 {
 
     printf("File operations completed successfully.\n")
 
-    let ptr: cptr u8 = cast<cptr u8>(malloc(100))
+    let ptr: cptr<u8> = cast<cptr<u8>>(malloc(100))
 
     if ptr == null {
         printf("Memory allocation failed.\n")
@@ -30,7 +30,7 @@ fn main() -> i32 {
 
     printf("pointer allocated at: %p\n", ptr)
 
-    memcpy(cast<cptr void>(ptr), "testteststesttestteststestetestetstetstestetestetsetst\0", 100)
+    memcpy(cast<cptr<void>>(ptr), "testteststesttestteststestetestetstetstestetestetsetst\0", 100)
 
     if (strcmp(ptr, "asd") == 0) {
         printf("Strings are equal.\n")
@@ -39,7 +39,7 @@ fn main() -> i32 {
     }
 
     printf("Copied string: %s\n", ptr)
-    free(cast<cptr void>(ptr))
+    free(cast<cptr<void>>(ptr))
 
     return 0
 }

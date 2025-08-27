@@ -45,7 +45,7 @@ fn main() -> i32 {
 ### Types
 
 - **Primitives**: `i32`, `u8`, `f64`, `bool`, `void`
-- **Pointers**: `cptr T` (C-compatible pointers)
+- **Pointers**: `cptr<T>` (C-compatible pointers)
 - **Strings**: Proper string implementation and C-style strings for compatability with C standard library
 - **Arrays**: Dynamic and fixed-size arrays -> Not yet implemented
 - **Custom Types**: Structs, enums -> Not yet implemented
@@ -57,11 +57,11 @@ fn main() -> i32 {
 let value: i32 = 42
 
 // Heap allocation via foreign functions
-let ptr: cptr u8 = cast<cptr u8>(malloc(100))
-free(cast<cptr void>(ptr))
+let ptr: cptr<u8> = cast<cptr<u8>>(malloc(100))
+free(cast<cptr<void>>(ptr))
 
 // Type casting
-let void_ptr = cast<cptr void>(ptr)
+let void_ptr = cast<cptr<void>>(ptr)
 ```
 
 ### Modules and Imports
@@ -70,8 +70,8 @@ let void_ptr = cast<cptr void>(ptr)
 import "cstdlib/stdio"    // Standard C library
 
 // Foreign function declarations
-foreign fn malloc(size: i32) -> cptr void
-foreign fn printf(format: cptr u8, args: ) -> i32
+foreign fn malloc(size: i32) -> cptr<void>
+foreign fn printf(format: cptr<u8>, args: raw_va_list) -> i32
 ```
 
 ## 🛠️ Building the Compiler

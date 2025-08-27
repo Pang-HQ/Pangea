@@ -634,7 +634,7 @@ std::unique_ptr<Expression> Parser::parsePrimary() {
 // Type parsing
 std::unique_ptr<Type> Parser::parseType() {
     // Handle nested pointer types: cptr, unique, shared, weak
-    // This allows for types like: shared unique weak Type, cptr cptr Type, etc.
+    // This allows for types like: shared<unique<weak<Type>>, cptr<cptr<Type>>, etc.
     if (match({TokenType::CPTR, TokenType::UNIQUE, TokenType::SHARED, TokenType::WEAK})) {
         return parsePointerType();
     }
@@ -699,16 +699,28 @@ std::unique_ptr<Type> Parser::parsePointerType() {
     TokenType pointer_kind = previous().type;
     SourceLocation location = previous().location;
     
-    if (pointer_kind == TokenType::CPTR) {
-        // C pointer: cptr Type (can be nested: cptr cptr Type)
-        auto pointee = parseType(); // This will recursively handle nested pointers
-        return std::make_unique<PointerType>(location, std::move(pointee), pointer_kind);
-    } else {
-        // Pang smart pointers: unique Type, shared Type, weak Type
-        // These can be nested: shared unique weak Type
-        auto pointee = parseType(); // This will recursively handle nested pointers
-        return std::make_unique<PointerType>(location, std::move(pointee), pointer_kind);
+    consume(TokenType::LESS, "Expected '<' after pointer type");
+    auto pointee = parseType(); // This will recursively handle nested pointers
+
+    // Check if > is repeated to make sure you don't get
+    // Expected '>' after pointer type BITWISE_RIGHT_SHIFT '>>' error
+    if (peek().type == TokenType::BITWISE_RIGHT_SHIFT) {
+        // First '>'
+        tokens[current].type = TokenType::GREATER;
+        tokens[current].lexeme = ">";
+        tokens[current].location.length = 1;
+
+        // Second '>'
+        Token second = tokens[current];
+        second.location.column += 1;
+        second.location.offset += 1;
+
+        tokens.insert(tokens.begin() + current + 1, second);
     }
+
+    consume(TokenType::GREATER, "Expected '>' after pointer type");
+    
+    return std::make_unique<PointerType>(location, std::move(pointee), pointer_kind);
 }
 
 // Parameter and argument parsing
