@@ -1,5 +1,4 @@
 #include "llvm_codegen.h"
-#include "../builtins/builtins.h"
 #include <iostream>
 #include <unordered_set>
 #include <optional>
@@ -34,19 +33,6 @@ LLVMCodeGenerator::LLVMCodeGenerator(ErrorReporter* reporter, bool verbose, bool
     context = std::make_unique<llvm::LLVMContext>();
     module = std::make_unique<llvm::Module>("pangea_module", *context);
     builder = std::make_unique<llvm::IRBuilder<>>(*context);
-    
-    // Register built-in functions using the new builtins system only if enabled
-    if (enable_builtins) {
-        try {
-            builtins::getBuiltinsRegistry().registerWithCodeGenerator(*this);
-            if (verbose) {
-                std::cout << "Built-in functions registered successfully!" << std::endl;
-            }
-        } catch (const std::exception& e) {
-            std::cerr << "Error registering built-in functions: " << e.what() << std::endl;
-            throw;
-        }
-    }
 }
 
 void LLVMCodeGenerator::generateCode(Program& program) {

@@ -95,14 +95,10 @@ def main():
         "../src/lexer/token.cpp",
         "../src/parser/parser.cpp",
         "../src/ast/ast_nodes.cpp",
-        "../src/ast/ast_visitor.cpp",
         "../src/semantic/type_checker.cpp",
         "../src/codegen/llvm_codegen.cpp",
-        "../src/builtins/builtins.cpp",
-        "../src/stdlib/platform/file_system.cpp",
         "../src/utils/source_location.cpp",
         "../src/utils/unicode/unicode_escape.cpp",
-        "../src/utils/unicode/unicode_escape.h",
         "../src/utils/error_reporter.cpp"
     ]
 

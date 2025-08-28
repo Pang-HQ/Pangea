@@ -1,7 +1,7 @@
 #include "type_checker.h"
-#include "../builtins/builtins.h"
 #include <sstream>
 #include <unordered_set>
+#include <algorithm>
 
 namespace pangea {
 
@@ -138,11 +138,6 @@ bool Scope::isDefined(const std::string& name) const {
 TypeChecker::TypeChecker(ErrorReporter* reporter, bool enable_builtins) 
     : error_reporter(reporter), global_scope(std::make_unique<Scope>()), current_scope(global_scope.get()) {
     initializeBuiltinTypes();
-    
-    // Register built-in functions only if enabled
-    if (enable_builtins) {
-        builtins::getBuiltinsRegistry().registerWithTypeChecker(*this);
-    }
 }
 
 void TypeChecker::analyze(Program& program) {
