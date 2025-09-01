@@ -97,6 +97,10 @@ void LLVMCodeGenerator::visit(PrimitiveType& node) {
     // Type nodes don't generate code directly
 }
 
+void LLVMCodeGenerator::visit(ConstType& node) {
+    // Type nodes don't generate code directly
+}
+
 void LLVMCodeGenerator::visit(ArrayType& node) {
     // Type nodes don't generate code directly
 }
@@ -187,10 +191,27 @@ void LLVMCodeGenerator::visit(BinaryExpression& node) {
         return;
     }
     
+    // Handle mixed-type operations by promoting to common type
+    llvm::Type* left_type = left_val->getType();
+    llvm::Type* right_type = right_val->getType();
+    
+    // If types are different and both are numeric, promote to common type
+    if (left_type != right_type && isNumericType(left_type) && isNumericType(right_type)) {
+        auto [promoted_left, promoted_right] = promoteToCommonType(left_val, right_val, node.location);
+        if (!promoted_left || !promoted_right) {
+            reportCodegenError(node.location, "Failed to promote operands to common type");
+            return;
+        }
+        left_val = promoted_left;
+        right_val = promoted_right;
+        left_type = left_val->getType();
+        right_type = right_val->getType();
+    }
+    
     llvm::Value* result = nullptr;
     
     // Handle integer operations
-    if (left_val->getType()->isIntegerTy() && right_val->getType()->isIntegerTy()) {
+    if (left_type->isIntegerTy() && right_type->isIntegerTy()) {
         switch (node.operator_token) {
             case TokenType::PLUS:
                 result = builder->CreateAdd(left_val, right_val, "addtmp");
@@ -1098,10 +1119,78 @@ void LLVMCodeGenerator::visit(FunctionDeclaration& node) {
 }
 
 void LLVMCodeGenerator::visit(VariableDeclaration& node) {
-    // Check if we're in a function context (needed for allocas)
+    // Check for global context:
     if (!current_function) {
-        // Global variables, constants, and type aliases don't need LLVM code generation
-        // They are handled at the module level or during semantic analysis
+        if (!node.initializer) {
+            if (!node.type) {
+                reportCodegenError(node.location, "Global variable must have a type or initializer");
+                return;
+            }
+
+            // Foreign variables are not initialised
+            // therefore this node must be foreign
+
+            // Add to symbol table
+            llvm::Value *g = new llvm::GlobalVariable(
+                *module,
+                convertType(*node.type),
+                dynamic_cast<ConstType*>(node.type.get()) != nullptr,
+                llvm::GlobalValue::ExternalLinkage, // Foreign variables are always externally linked
+                nullptr,
+                llvm::Twine(node.name)
+            );
+
+            named_values[node.name] = g;
+
+            return;
+        }
+
+        auto linkage = node.is_exported
+            ? llvm::GlobalValue::ExternalLinkage
+            : llvm::GlobalValue::InternalLinkage;
+        
+
+        llvm::Value* init_val = nullptr;
+
+        
+        node.initializer->accept(*this);
+        init_val = getExpressionValue(*node.initializer);
+
+        if (!init_val) {
+            reportCodegenError(node.location, "Invalid initializer for global");
+            return;
+        }
+
+        if (!llvm::isa<llvm::Constant>(init_val)) {
+            reportCodegenError(node.location, "Global initializer must be a constant");
+            return;
+        }
+
+        llvm::Type* type = nullptr;
+
+        if (node.type) {
+            type = convertType(*node.type);
+        } else {
+            type = init_val->getType();
+        }
+
+        if (init_val->getType() != type) {
+            reportCodegenError(node.location, "Global initializer type does not match variable type");
+            return;
+        }
+
+        auto* g = new llvm::GlobalVariable(
+            *module,
+            type,
+            dynamic_cast<ConstType*>(node.type.get()) != nullptr,
+            linkage,
+            llvm::cast<llvm::Constant>(init_val),
+            llvm::Twine(node.name)
+        );
+
+        // register symbol for imports
+        named_values[node.name] = g;
+
         return;
     }
     
@@ -1192,6 +1281,9 @@ void LLVMCodeGenerator::visit(EnumDeclaration& node) {
 llvm::Type* LLVMCodeGenerator::convertType(Type& ast_type) {
     if (auto primitive = dynamic_cast<PrimitiveType*>(&ast_type)) {
         return getPrimitiveType(primitive->type_token);
+    } else if (auto const_type = dynamic_cast<ConstType*>(&ast_type)) {
+        // Just convert the base type; constness is a semantic property in LLVM
+        return convertType(*const_type->base_type);
     } else if (auto array = dynamic_cast<ArrayType*>(&ast_type)) {
         llvm::Type* element_type = convertType(*array->element_type);
         if (!element_type) return nullptr;
@@ -1607,6 +1699,107 @@ bool LLVMCodeGenerator::isStringLiteral(llvm::Value* value) {
     }
     
     return false;
+}
+
+// Type conversion helper implementations
+bool LLVMCodeGenerator::isNumericType(llvm::Type* type) {
+    return type->isIntegerTy() || type->isFloatingPointTy();
+}
+
+int LLVMCodeGenerator::getNumericTypeRank(llvm::Type* type) {
+    // Numeric promotion rank (higher = wider type)
+    if (type->isIntegerTy()) {
+        unsigned bits = type->getIntegerBitWidth();
+        switch (bits) {
+            case 1: return 0;  // bool
+            case 8: return 1;  // i8/u8
+            case 16: return 2; // i16/u16
+            case 32: return 3; // i32/u32
+            case 64: return 4; // i64/u64
+            default: return 3; // default to i32 rank
+        }
+    } else if (type->isFloatTy()) {
+        return 5; // f32
+    } else if (type->isDoubleTy()) {
+        return 6; // f64
+    }
+    return 0;
+}
+
+llvm::Type* LLVMCodeGenerator::getCommonNumericType(llvm::Type* left, llvm::Type* right) {
+    // Return the common type for arithmetic operations (usual arithmetic conversions)
+    if (!isNumericType(left) || !isNumericType(right)) {
+        return nullptr; // Not numeric types
+    }
+    
+    // If either is floating point, promote to the wider floating point type
+    if (left->isFloatingPointTy() || right->isFloatingPointTy()) {
+        if (left->isDoubleTy() || right->isDoubleTy()) {
+            return llvm::Type::getDoubleTy(*context); // f64
+        }
+        return llvm::Type::getFloatTy(*context); // f32
+    }
+    
+    // Both are integers - promote to the wider type
+    int left_rank = getNumericTypeRank(left);
+    int right_rank = getNumericTypeRank(right);
+    
+    return (left_rank >= right_rank) ? left : right;
+}
+
+std::pair<llvm::Value*, llvm::Value*> LLVMCodeGenerator::promoteToCommonType(llvm::Value* left, llvm::Value* right, const SourceLocation& location) {
+    llvm::Type* left_type = left->getType();
+    llvm::Type* right_type = right->getType();
+    
+    // Get the common type
+    llvm::Type* common_type = getCommonNumericType(left_type, right_type);
+    if (!common_type) {
+        return {nullptr, nullptr};
+    }
+    
+    // Convert left operand if needed
+    llvm::Value* promoted_left = left;
+    if (left_type != common_type) {
+        if (left_type->isIntegerTy() && common_type->isFloatingPointTy()) {
+            // Integer to float
+            promoted_left = builder->CreateSIToFP(left, common_type, "i2f");
+        } else if (left_type->isFloatingPointTy() && common_type->isFloatingPointTy()) {
+            // Float to float (f32 to f64)
+            promoted_left = builder->CreateFPExt(left, common_type, "fpext");
+        } else if (left_type->isIntegerTy() && common_type->isIntegerTy()) {
+            // Integer to integer (widening)
+            unsigned left_bits = left_type->getIntegerBitWidth();
+            unsigned common_bits = common_type->getIntegerBitWidth();
+            if (left_bits < common_bits) {
+                promoted_left = builder->CreateSExt(left, common_type, "sext");
+            } else if (left_bits > common_bits) {
+                promoted_left = builder->CreateTrunc(left, common_type, "trunc");
+            }
+        }
+    }
+    
+    // Convert right operand if needed
+    llvm::Value* promoted_right = right;
+    if (right_type != common_type) {
+        if (right_type->isIntegerTy() && common_type->isFloatingPointTy()) {
+            // Integer to float
+            promoted_right = builder->CreateSIToFP(right, common_type, "i2f");
+        } else if (right_type->isFloatingPointTy() && common_type->isFloatingPointTy()) {
+            // Float to float (f32 to f64)
+            promoted_right = builder->CreateFPExt(right, common_type, "fpext");
+        } else if (right_type->isIntegerTy() && common_type->isIntegerTy()) {
+            // Integer to integer (widening)
+            unsigned right_bits = right_type->getIntegerBitWidth();
+            unsigned common_bits = common_type->getIntegerBitWidth();
+            if (right_bits < common_bits) {
+                promoted_right = builder->CreateSExt(right, common_type, "sext");
+            } else if (right_bits > common_bits) {
+                promoted_right = builder->CreateTrunc(right, common_type, "trunc");
+            }
+        }
+    }
+    
+    return {promoted_left, promoted_right};
 }
 
 } // namespace pangea

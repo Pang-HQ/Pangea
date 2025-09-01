@@ -30,11 +30,19 @@ std::string PrimitiveType::toString() const {
         case TokenType::CPTR: return "cptr";
         case TokenType::RAW_VA_LIST: return "raw_va_list";
 
-        // user-defined types, assume all identifiers are "assumed_type" here - the name will be in the token's lexeme
-        case TokenType::IDENTIFIER: return "assumed_type";
+        // user-defined types, assume all identifiers are "UserDefinedType" here - the name will be in the token's lexeme
+        case TokenType::IDENTIFIER: return "UserDefinedType";
         
         default: return "unknown";
     }
+}
+
+void ConstType::accept(ASTVisitor& visitor) {
+    visitor.visit(*this);
+}
+
+std::string ConstType::toString() const {
+    return "const " + base_type->toString();
 }
 
 void ArrayType::accept(ASTVisitor& visitor) {

@@ -1,4 +1,5 @@
 import "cstdlib/stdio.pang"
+import "windows/api/winerror.pang"
 
 fn run_fib(n: i32) -> i32 {
     if n <= 1 {
@@ -26,6 +27,12 @@ fn main() -> i32 {
         printf("%d%s fibonacci number is: %d\n", n, suffix, run_fib(n))
         n++
     }
+
+    let i: const i32 = ERROR_SUCCESS
+    let j: const i32 = ERROR_INVALID_PARAMETER
+    let k: const i32 = ERROR_OUTOFMEMORY
+
+    printf("error codes: %d, %d, %d\n", i, j, k)
 
     return 0
 }

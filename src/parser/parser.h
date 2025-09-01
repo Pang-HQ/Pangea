@@ -39,8 +39,7 @@ private:
     std::unique_ptr<FunctionDeclaration> parseFunctionDeclaration();
     std::unique_ptr<FunctionDeclaration> parseForeignFunctionDeclaration();
     std::unique_ptr<VariableDeclaration> parseVariableDeclaration(bool is_mutable = false);
-    std::unique_ptr<VariableDeclaration> parseConstDeclaration();
-    std::unique_ptr<VariableDeclaration> parseForeignConstDeclaration();
+    std::unique_ptr<VariableDeclaration> parseForeignVariableDeclaration(bool is_mutable = false);
     std::unique_ptr<VariableDeclaration> parseTypeAlias();
     std::unique_ptr<ClassDeclaration> parseClassDeclaration();
     std::unique_ptr<StructDeclaration> parseStructDeclaration();

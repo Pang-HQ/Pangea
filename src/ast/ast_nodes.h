@@ -40,6 +40,17 @@ public:
     std::string toString() const override;
 };
 
+class ConstType : public Type {
+public:
+    std::unique_ptr<Type> base_type;
+
+    ConstType(const SourceLocation& loc, std::unique_ptr<Type> base)
+        : Type(loc), base_type(std::move(base)) {}
+
+    void accept(ASTVisitor& visitor) override;
+    std::string toString() const override;
+};
+
 class ArrayType : public Type {
 public:
     std::unique_ptr<Type> element_type;
@@ -266,7 +277,8 @@ public:
 // Declarations
 class Declaration : public ASTNode {
 public:
-    explicit Declaration(const SourceLocation& loc) : ASTNode(loc) {}
+    bool is_exported;
+    explicit Declaration(const SourceLocation& loc) : ASTNode(loc), is_exported(false) {}
 };
 
 class DeclarationStatement : public Statement {

@@ -21,10 +21,12 @@ public:
         VOID_TYPE,
         ERROR_TYPE
     };
+
+    bool is_const;
     
     // Single constructor for kind and optional name
-    explicit SemanticType(Kind kind, const std::string& name = "")
-        : kind(kind), name(name) {}
+    explicit SemanticType(Kind kind, const std::string& name = "", bool is_const = false)
+        : kind(kind), name(name), is_const(is_const) {}
 
     // Copy constructor
     SemanticType(const SemanticType& other)
@@ -55,11 +57,13 @@ public:
     std::unique_ptr<SemanticType> return_type;
     
     bool isCompatibleWith(const SemanticType& other) const;
+    bool isNumberType() const;
+    bool isFloatingPointType() const;
     std::string toString() const;
-    
-    static std::unique_ptr<SemanticType> createPrimitive(const std::string& name);
-    static std::unique_ptr<SemanticType> createArray(std::unique_ptr<SemanticType> element);
-    static std::unique_ptr<SemanticType> createPointer(std::unique_ptr<SemanticType> pointee);
+
+    static std::unique_ptr<SemanticType> createPrimitive(const std::string& name, bool is_const = false);
+    static std::unique_ptr<SemanticType> createArray(std::unique_ptr<SemanticType> element, bool is_const = false);
+    static std::unique_ptr<SemanticType> createPointer(std::unique_ptr<SemanticType> pointee, TokenType kind, bool is_const = false);
     static std::unique_ptr<SemanticType> createFunction(
         std::vector<std::unique_ptr<SemanticType>> params,
         std::unique_ptr<SemanticType> ret_type
@@ -74,6 +78,10 @@ struct Symbol {
     std::unique_ptr<SemanticType> type;
     bool is_mutable;
     bool is_initialized;
+    // Module where this symbol was declared (empty for built-ins)
+    std::string declared_module;
+    // Whether this symbol is exported from its module
+    bool is_exported = false;
     SourceLocation declaration_location;
     
     Symbol(const std::string& symbol_name, std::unique_ptr<SemanticType> symbol_type, 
@@ -96,6 +104,9 @@ public:
     bool isDefined(const std::string& name) const;
     
     Scope* getParent() const { return parent; }
+
+    // Expose symbols for module export collection
+    const std::unordered_map<std::string, std::unique_ptr<Symbol>>& getSymbols() const { return symbols; }
 };
 
 // Type checker and semantic analyzer
@@ -113,6 +124,9 @@ private:
     
     // Current function return type for return statement checking
     SemanticType* current_function_return_type = nullptr;
+
+    // Current module being analyzed (used for visibility checks)
+    std::string current_module_name;
     
 public:
     explicit TypeChecker(ErrorReporter* reporter, bool enable_builtins = true);
@@ -122,6 +136,7 @@ public:
     
     // Type visitors
     void visit(PrimitiveType& node) override;
+    void visit(ConstType& node) override;
     void visit(ArrayType& node) override;
     void visit(PointerType& node) override;
     void visit(GenericType& node) override;
@@ -173,6 +188,30 @@ private:
     
     // Built-in type creation
     void initializeBuiltinTypes();
+
+    // Numeric and conversion helpers
+    bool isIntegerType(const SemanticType& t) const;
+    int numericRank(const SemanticType& t) const;
+    std::string commonNumericTypeName(const SemanticType& a, const SemanticType& b) const;
+    bool isImplicitlyConvertible(const SemanticType& from, const SemanticType& to) const;
+
+    // Import/Export visibility helpers
+    struct ImportInfo {
+        std::string module_path;
+        std::vector<std::string> items; // empty means wildcard
+        bool is_wildcard = false;
+    };
+    // Map: current module -> its list of imports
+    std::unordered_map<std::string, std::vector<ImportInfo>> module_imports;
+
+    // Export table: module -> (symbol name -> exported symbol copy)
+    std::unordered_map<std::string, std::unordered_map<std::string, std::unique_ptr<Symbol>>> exports_by_module;
+
+    bool isSymbolVisibleInCurrentModule(const Symbol& sym) const;
+
+    // Module utilities
+    void collectModuleExports(Module& node);
+    void injectImportsIntoScope(const Module& node);
 
 public:
     // Register built-in functions

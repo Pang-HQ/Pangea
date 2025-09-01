@@ -8,44 +8,92 @@ namespace pangea {
 // SemanticType implementation
 bool SemanticType::isCompatibleWith(const SemanticType& other) const {
     if (kind == Kind::ERROR_TYPE || other.kind == Kind::ERROR_TYPE) {
-        return true; // Error types are compatible with everything to avoid cascading errors
-    }
-    
-    if (kind != other.kind) {
         return false;
     }
     
-    switch (kind) {
-        case Kind::PRIMITIVE:
-        case Kind::VOID_TYPE:
-            return name == other.name;
-            
-        case Kind::ARRAY:
-            return element_type && other.element_type && 
-                   element_type->isCompatibleWith(*other.element_type);
-                   
-        case Kind::POINTER:
-            return element_type && other.element_type && 
-                   element_type->isCompatibleWith(*other.element_type);
-                   
-        case Kind::FUNCTION:
-            if (!return_type || !other.return_type || 
-                !return_type->isCompatibleWith(*other.return_type)) {
-                return false;
-            }
-            if (parameter_types.size() != other.parameter_types.size()) {
-                return false;
-            }
-            for (size_t i = 0; i < parameter_types.size(); ++i) {
-                if (!parameter_types[i]->isCompatibleWith(*other.parameter_types[i])) {
+    // Exact type match
+    if (kind == other.kind && name == other.name) {
+        switch (kind) {
+            case Kind::PRIMITIVE:
+            case Kind::VOID_TYPE:
+                return true;
+                
+            case Kind::ARRAY:
+                return element_type && other.element_type && 
+                       element_type->isCompatibleWith(*other.element_type);
+                       
+            case Kind::POINTER:
+                return element_type && other.element_type && 
+                       element_type->isCompatibleWith(*other.element_type);
+                       
+            case Kind::FUNCTION:
+                if (!return_type || !other.return_type || 
+                    !return_type->isCompatibleWith(*other.return_type)) {
                     return false;
                 }
-            }
-            return true;
-            
-        default:
-            return false;
+                if (parameter_types.size() != other.parameter_types.size()) {
+                    return false;
+                }
+                for (size_t i = 0; i < parameter_types.size(); ++i) {
+                    if (!parameter_types[i]->isCompatibleWith(*other.parameter_types[i])) {
+                        return false;
+                    }
+                }
+                return true;
+                
+            default:
+                return false;
+        }
     }
+    
+    // Allow implicit numeric conversions for compatibility
+    if (kind == Kind::PRIMITIVE && other.kind == Kind::PRIMITIVE) {
+        // Both are numeric types - allow implicit conversions
+        if ((isNumberType() || isFloatingPointType()) && 
+            (other.isNumberType() || other.isFloatingPointType())) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+bool SemanticType::isNumberType() const {
+    if (kind == Kind::ERROR_TYPE) return false;
+
+    // Primitive integer names
+    static const std::unordered_set<std::string> integer_names = {
+        "i8", "i16", "i32", "i64",
+        "u8", "u16", "u32", "u64"
+    };
+
+    if (kind == Kind::PRIMITIVE && integer_names.contains(name))
+        return true;
+    
+
+    // If it's a typedef / alias, check underlying type
+    if (element_type)
+        return element_type->isNumberType();
+    
+    return false;
+}
+
+bool SemanticType::isFloatingPointType() const {
+    if (kind == Kind::ERROR_TYPE) return false;
+
+    // Primitive floating-point names
+    static const std::unordered_set<std::string> float_names = {
+        "f32", "f64"
+    };
+
+    if (kind == Kind::PRIMITIVE && float_names.contains(name))
+        return true;
+
+    // If it's a typedef / alias, check underlying type
+    if (element_type)
+        return element_type->isFloatingPointType();
+
+    return false;
 }
 
 std::string SemanticType::toString() const {
@@ -53,13 +101,13 @@ std::string SemanticType::toString() const {
         case Kind::PRIMITIVE:
         case Kind::VOID_TYPE:
             return name;
-            
+        
         case Kind::ARRAY:
             return "[" + (element_type ? element_type->toString() : "unknown") + "]";
-            
+        
         case Kind::POINTER:
             return "*" + (element_type ? element_type->toString() : "unknown");
-            
+        
         case Kind::FUNCTION: {
             std::ostringstream oss;
             oss << "fn(";
@@ -73,27 +121,44 @@ std::string SemanticType::toString() const {
         
         case Kind::ERROR_TYPE:
             return "<error>";
-            
+        
         default:
             return "<unknown>";
     }
 }
 
-std::unique_ptr<SemanticType> SemanticType::createPrimitive(const std::string& name) {
-    return std::make_unique<SemanticType>(Kind::PRIMITIVE, name);
+std::unique_ptr<SemanticType> SemanticType::createPrimitive(const std::string& name, bool is_const) {
+    return std::make_unique<SemanticType>(Kind::PRIMITIVE, name, is_const);
 }
 
-std::unique_ptr<SemanticType> SemanticType::createArray(std::unique_ptr<SemanticType> element) {
-    auto type = std::make_unique<SemanticType>(Kind::ARRAY);
+std::unique_ptr<SemanticType> SemanticType::createArray(std::unique_ptr<SemanticType> element, bool is_const) {
+    auto type = std::make_unique<SemanticType>(Kind::ARRAY, "Array", is_const);
     type->element_type = std::move(element);
+    type->is_const = is_const;
     return type;
 }
 
-std::unique_ptr<SemanticType> SemanticType::createPointer(std::unique_ptr<SemanticType> pointee) {
+std::unique_ptr<SemanticType> SemanticType::createPointer(
+    std::unique_ptr<SemanticType> pointee,
+    TokenType kind,
+    bool is_const
+) {
     auto type = std::make_unique<SemanticType>(Kind::POINTER);
     type->element_type = std::move(pointee);
+    type->is_const = is_const;
+
+    // Store pointer kind as name or a dedicated field
+    switch (kind) {
+        case TokenType::CPTR:   type->name = "cptr"; break;
+        case TokenType::UNIQUE: type->name = "unique_ptr"; break;
+        case TokenType::SHARED: type->name = "shared_ptr"; break;
+        case TokenType::WEAK:   type->name = "weak_ptr"; break;
+        default:                type->name = "<error_ptr>"; break;
+    }
+
     return type;
 }
+
 
 std::unique_ptr<SemanticType> SemanticType::createFunction(
     std::vector<std::unique_ptr<SemanticType>> params,
@@ -148,6 +213,10 @@ void TypeChecker::visit(PrimitiveType& node) {
     // Type nodes don't need semantic analysis themselves
 }
 
+void TypeChecker::visit(ConstType& node) {
+    // TODO: Implement semantic analysis for const types
+}
+
 void TypeChecker::visit(ArrayType& node) {
     if (node.element_type) {
         node.element_type->accept(*this);
@@ -168,12 +237,40 @@ void TypeChecker::visit(LiteralExpression& node) {
     
     switch (node.literal_token.type) {
         case TokenType::INTEGER_LITERAL:
-            // Default integer literals to i32
-            type = SemanticType::createPrimitive("i32");
+        {
+            // Default integer type
+            std::string t = node.literal_token.int_value > INT32_MAX ? "i64" : "i32";
+
+            // check to make sure an i32 fits it
+            // TODO: add Token::uint_value in case it is too large for int to store
+            //if (node.literal_token.int_value > INT64_MAX)
+            //    t = "u64";
+
+            // Map suffix to type (overwrite any previous type inference made)
+            static const std::unordered_map<std::string, std::string> int_suffixes = {
+                {"i8", "i8"}, {"i16", "i16"}, {"i32", "i32"}, {"i64", "i64"},
+                {"u8", "u8"}, {"u16", "u16"}, {"u32", "u32"}, {"u64", "u64"}
+            };
+
+            for (const auto& [suffix, type_name] : int_suffixes) {
+                if (node.literal_token.lexeme.ends_with(suffix)) {
+                    t = type_name;
+                    break;
+                }
+            }
+
+            type = SemanticType::createPrimitive(t);
             break;
+        }
+
         case TokenType::FLOAT_LITERAL:
             // Default float literals to f64
             type = SemanticType::createPrimitive("f64");
+
+            if (node.literal_token.lexeme.ends_with("f32")) {
+                type = SemanticType::createPrimitive("f32");
+            }
+
             break;
         case TokenType::BOOLEAN_LITERAL:
             type = SemanticType::createPrimitive("bool");
@@ -227,12 +324,20 @@ void TypeChecker::visit(BinaryExpression& node) {
         case TokenType::DIVIDE:
         case TokenType::MODULO:
         case TokenType::POWER:
-            if (left_type->isCompatibleWith(*right_type) && 
-                (left_type->name == "i8" || left_type->name == "i16" || left_type->name == "i32" || left_type->name == "i64" ||
-                 left_type->name == "f32" || left_type->name == "f64")) {
-                result_type = std::make_unique<SemanticType>(*left_type);
+            // Use proper type promotion for arithmetic operations
+            if ((left_type->isNumberType() || left_type->isFloatingPointType()) && 
+                (right_type->isNumberType() || right_type->isFloatingPointType())) {
+                
+                // Find the common type using usual arithmetic conversions
+                std::string common_type = commonNumericTypeName(*left_type, *right_type);
+                if (!common_type.empty()) {
+                    result_type = SemanticType::createPrimitive(common_type);
+                } else {
+                    result_type = std::make_unique<SemanticType>(*left_type);
+                }
             } else {
-                reportTypeError(node.location, "Invalid operands for arithmetic operation");
+                reportTypeError(node.location, "Invalid operands for arithmetic operation: " + 
+                    left_type->toString() + " and " + right_type->toString());
                 result_type = SemanticType::createError();
             }
             break;
@@ -258,10 +363,15 @@ void TypeChecker::visit(BinaryExpression& node) {
             if (isNullComparison(*left_type, *right_type)) {
                 // Allow comparison between pointer types and null
                 result_type = SemanticType::createPrimitive("bool");
+            } else if ((left_type->isNumberType() || left_type->isFloatingPointType()) && 
+                       (right_type->isNumberType() || right_type->isFloatingPointType())) {
+                // Allow comparison between any numeric types with implicit promotion
+                result_type = SemanticType::createPrimitive("bool");
             } else if (left_type->isCompatibleWith(*right_type)) {
                 result_type = SemanticType::createPrimitive("bool");
             } else {
-                reportTypeError(node.location, "Cannot compare incompatible types");
+                reportTypeError(node.location, "Cannot compare incompatible types: " + 
+                    left_type->toString() + " and " + right_type->toString());
                 result_type = SemanticType::createError();
             }
             break;
@@ -347,10 +457,9 @@ void TypeChecker::visit(CallExpression& node) {
     if (auto member_expr = dynamic_cast<MemberExpression*>(node.callee.get())) {
         auto object_type = getExpressionType(*member_expr->object);
         // Dynamically resolve method calls based on object type
-        // This would be implemented by looking up the method in the type's method table
+        // lets do this a bit later :)
         if (object_type) {
-            // For now, assume method calls are valid and return a placeholder type
-            // In a full implementation, we'd look up the method signature
+            // TODO: look up function signature
             setExpressionType(node, SemanticType::createPrimitive("unknown"));
         } else {
             setExpressionType(node, SemanticType::createError());
@@ -480,11 +589,18 @@ void TypeChecker::visit(AssignmentExpression& node) {
             return;
         }
     } else {
+        // make sure to promote right type to const if left type is const in constant assignments
+        auto promoted_right = std::make_unique<SemanticType>(*right_type);
+
+        if (left_type->is_const) {
+            promoted_right->is_const = true;
+        }
+
         // For simple assignment, right type should be compatible with left type
-        if (!right_type->isCompatibleWith(*left_type)) {
+        if (!promoted_right->isCompatibleWith(*left_type)) {
             reportTypeError(node.location, 
                 "Type mismatch in assignment: expected " + left_type->toString() +
-                ", got " + right_type->toString());
+                ", got " + promoted_right->toString());
             setExpressionType(node, SemanticType::createError());
             return;
         }
@@ -710,6 +826,8 @@ void TypeChecker::visit(FunctionDeclaration& node) {
         node.location
     );
     function_symbol->is_initialized = true;
+    function_symbol->declared_module = current_module_name;
+    function_symbol->is_exported = node.is_exported;
     current_scope->define(node.name, std::move(function_symbol));
     
     // Only analyze function body for non-foreign functions
@@ -790,6 +908,8 @@ void TypeChecker::visit(VariableDeclaration& node) {
         symbol->is_initialized = true;
     }
     
+    symbol->declared_module = current_module_name;
+    symbol->is_exported = node.is_exported;
     current_scope->define(node.name, std::move(symbol));
 }
 
@@ -799,7 +919,12 @@ void TypeChecker::visit(ImportDeclaration& node) {
 }
 
 void TypeChecker::visit(Module& node) {
+    // Set current module context
+    current_module_name = node.module_name;
+    
     // Process all imports first (for symbol resolution)
+    injectImportsIntoScope(node);
+    
     for (auto& import : node.imports) {
         import->accept(*this);
     }
@@ -808,17 +933,45 @@ void TypeChecker::visit(Module& node) {
     for (auto& decl : node.declarations) {
         decl->accept(*this);
     }
+    
+    // Collect exports from this module
+    collectModuleExports(node);
 }
 
 void TypeChecker::visit(Program& node) {
-    // Process all modules
+    // First pass: Process all modules to collect their exports
     for (auto& module : node.modules) {
-        module->accept(*this);
+        current_module_name = module->module_name;
+        
+        // Process declarations to populate global scope
+        for (auto& decl : module->declarations) {
+            decl->accept(*this);
+        }
+        
+        // Collect exports
+        collectModuleExports(*module);
+    }
+    
+    // Second pass: Process imports and inject symbols
+    for (auto& module : node.modules) {
+        current_module_name = module->module_name;
+        injectImportsIntoScope(*module);
     }
     
     // Process the main module
     if (node.main_module) {
-        node.main_module->accept(*this);
+        current_module_name = node.main_module->module_name;
+        injectImportsIntoScope(*node.main_module);
+        
+        for (auto& import : node.main_module->imports) {
+            import->accept(*this);
+        }
+        
+        for (auto& decl : node.main_module->declarations) {
+            decl->accept(*this);
+        }
+        
+        collectModuleExports(*node.main_module);
     }
 }
 
@@ -1033,59 +1186,28 @@ void TypeChecker::exitScope() {
 
 std::unique_ptr<SemanticType> TypeChecker::convertASTType(Type& ast_type) {
     if (auto primitive = dynamic_cast<PrimitiveType*>(&ast_type)) {
-        switch (primitive->type_token) {
-            case TokenType::I8: return SemanticType::createPrimitive("i8");
-            case TokenType::I16: return SemanticType::createPrimitive("i16");
-            case TokenType::I32: return SemanticType::createPrimitive("i32");
-            case TokenType::I64: return SemanticType::createPrimitive("i64");
-            case TokenType::U8: return SemanticType::createPrimitive("u8");
-            case TokenType::U16: return SemanticType::createPrimitive("u16");
-            case TokenType::U32: return SemanticType::createPrimitive("u32");
-            case TokenType::U64: return SemanticType::createPrimitive("u64");
-            case TokenType::F32: return SemanticType::createPrimitive("f32");
-            case TokenType::F64: return SemanticType::createPrimitive("f64");
-            case TokenType::BOOL: return SemanticType::createPrimitive("bool");
-            case TokenType::STRING: return SemanticType::createPrimitive("string");
-            case TokenType::VOID: return SemanticType::createVoid();
-            case TokenType::SELF: return SemanticType::createPrimitive("self");
-            case TokenType::RAW_VA_LIST: return SemanticType::createPrimitive("raw_va_list");
-            case TokenType::IDENTIFIER: 
-                // Handle user-defined types (classes, structs, enums)
-                return SemanticType::createPrimitive("UserDefinedType");
-            default: return SemanticType::createError();
-        }
+        return SemanticType::createPrimitive(primitive->toString());
+    } else if (auto const_type = dynamic_cast<ConstType*>(&ast_type)) {
+        auto base_type = convertASTType(*const_type->base_type);
+        base_type->is_const = true; // just set is const here its easier idk
+        //printf("BASE NAME TEST: %s\n", base_type->name.c_str());
+        return base_type;
     } else if (auto array = dynamic_cast<ArrayType*>(&ast_type)) {
         auto element_type = convertASTType(*array->element_type);
-        return SemanticType::createArray(std::move(element_type));
+        auto arr_type = SemanticType::createArray(
+            std::move(element_type),
+            dynamic_cast<ConstType*>(&ast_type) != nullptr // is_const if wrapped in ConstType
+        );
+        return arr_type;
     } else if (auto pointer = dynamic_cast<PointerType*>(&ast_type)) {
         auto pointee_type = convertASTType(*pointer->pointee_type);
-        
-        // Handle different pointer types
-        std::string pointer_type_name;
-        switch (pointer->pointer_kind) {
-            case TokenType::CPTR:
-                pointer_type_name = "cptr";
-                break;
-            case TokenType::UNIQUE:
-                pointer_type_name = "unique_ptr";
-                break;
-            case TokenType::SHARED:
-                pointer_type_name = "shared_ptr";
-                break;
-            case TokenType::WEAK:
-                pointer_type_name = "weak_ptr";
-                break;
-            default:
-                pointer_type_name = "unknown_ptr";
-                break;
-        }
-        
-        // Create a specialized pointer type that includes the pointer kind information
-        auto ptr_type = SemanticType::createPointer(std::move(pointee_type));
-        ptr_type->name = pointer_type_name; // Override the name to include pointer kind
+        auto ptr_type = SemanticType::createPointer(
+            std::move(pointee_type),
+            pointer->pointer_kind,          // pass the pointer kind
+            dynamic_cast<ConstType*>(&ast_type) != nullptr // is_const if wrapped in ConstType
+        );
         return ptr_type;
     } else if (auto generic = dynamic_cast<GenericType*>(&ast_type)) {
-        // For now, treat generic types as the base type
         return SemanticType::createPrimitive(generic->base_name);
     }
     
@@ -1199,16 +1321,37 @@ bool TypeChecker::isForeignVariadicFunction(const std::string& name) const {
 }
 
 bool TypeChecker::isVariadicCompatible(const SemanticType& type) const {
+    // If this type has an element_type, it means it's a typedef/alias
+    // Check the underlying type recursively
+    if (type.element_type) {
+        return isVariadicCompatible(*type.element_type);
+    }
+
     // Types that are compatible with variadic functions (C varargs)
     // Basic primitive types that can be passed to printf-style functions
     if (type.kind == SemanticType::Kind::PRIMITIVE) {
-        return type.name == "i8" || type.name == "i16" || type.name == "i32" || type.name == "i64" ||
-               type.name == "u8" || type.name == "u16" || type.name == "u32" || type.name == "u64" ||
-               type.name == "f32" || type.name == "f64" || type.name == "bool" || type.name == "string";
+        // Allow basic numeric and string types
+        if (type.name == "i8" || type.name == "i16" || type.name == "i32" || type.name == "i64" ||
+            type.name == "u8" || type.name == "u16" || type.name == "u32" || type.name == "u64" ||
+            type.name == "f32" || type.name == "f64" || type.name == "bool" || type.name == "string") {
+            return true;
+        }
+        
+        // Special case: UserDefinedType primitives that are actually type aliases
+        // These should be resolved to their underlying types, but for now we'll be permissive
+        // since they're likely to be pointer types (like FILE = cptr<_iobuf>)
+        if (type.name == "UserDefinedType") {
+            return true;
+        }
     }
     
     // Pointers are also compatible with variadic functions
     if (type.kind == SemanticType::Kind::POINTER) {
+        return true;
+    }
+    
+    // Arrays can decay to pointers in variadic contexts
+    if (type.kind == SemanticType::Kind::ARRAY) {
         return true;
     }
     
@@ -1248,6 +1391,186 @@ bool TypeChecker::isNullComparison(const SemanticType& left_type, const Semantic
     
     // Allow comparison if one side is a pointer and the other is null
     return (left_is_pointer && right_is_null) || (right_is_pointer && left_is_null);
+}
+
+// Numeric conversion helper implementations
+bool TypeChecker::isIntegerType(const SemanticType& t) const {
+    static const std::unordered_set<std::string> integer_types = {
+        "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64"
+    };
+    return t.kind == SemanticType::Kind::PRIMITIVE && integer_types.contains(t.name);
+}
+
+int TypeChecker::numericRank(const SemanticType& t) const {
+    // Numeric promotion rank (higher = wider type)
+    static const std::unordered_map<std::string, int> ranks = {
+        {"i8", 1}, {"u8", 1},
+        {"i16", 2}, {"u16", 2},
+        {"i32", 3}, {"u32", 3},
+        {"i64", 4}, {"u64", 4},
+        {"f32", 5}, {"f64", 6}
+    };
+    auto it = ranks.find(t.name);
+    return it != ranks.end() ? it->second : 0;
+}
+
+std::string TypeChecker::commonNumericTypeName(const SemanticType& a, const SemanticType& b) const {
+    // Return the common type for arithmetic operations (usual arithmetic conversions)
+    if (!((a.isNumberType() || a.isFloatingPointType()) && 
+          (b.isNumberType() || b.isFloatingPointType()))) {
+        return ""; // Not numeric types
+    }
+    
+    // If either is floating point, promote to the wider floating point type
+    if (a.isFloatingPointType() || b.isFloatingPointType()) {
+        if (a.name == "f64" || b.name == "f64") return "f64";
+        return "f32";
+    }
+    
+    // Both are integers - promote to the wider type
+    int rank_a = numericRank(a);
+    int rank_b = numericRank(b);
+    
+    if (rank_a >= rank_b) return a.name;
+    return b.name;
+}
+
+bool TypeChecker::isImplicitlyConvertible(const SemanticType& from, const SemanticType& to) const {
+    // Allow implicit conversions between numeric types
+    if ((from.isNumberType() || from.isFloatingPointType()) && 
+        (to.isNumberType() || to.isFloatingPointType())) {
+        
+        // Allow widening conversions without warning
+        int from_rank = numericRank(from);
+        int to_rank = numericRank(to);
+        
+        // Always allow widening (smaller to larger)
+        if (from_rank <= to_rank) return true;
+        
+        // Allow narrowing but it should generate a warning elsewhere
+        return true;
+    }
+    
+    // Allow exact type matches
+    return from.isCompatibleWith(to);
+}
+
+// Module visibility and export/import helpers
+bool TypeChecker::isSymbolVisibleInCurrentModule(const Symbol& sym) const {
+    // Built-in symbols (empty declared_module) are always visible
+    if (sym.declared_module.empty()) {
+        return true;
+    }
+    
+    // Symbols from the current module are always visible
+    if (sym.declared_module == current_module_name) {
+        return true;
+    }
+    
+    // Check if the symbol is exported and imported
+    if (!sym.is_exported) {
+        return false; // Non-exported symbols are not visible outside their module
+    }
+    
+    // Check if current module imports the symbol's module
+    auto imports_it = module_imports.find(current_module_name);
+    if (imports_it == module_imports.end()) {
+        return false; // No imports
+    }
+    
+    for (const auto& import : imports_it->second) {
+        if (import.module_path == sym.declared_module) {
+            // Check if it's a wildcard import or specific import
+            if (import.is_wildcard) {
+                return true;
+            }
+            
+            // Check if symbol is specifically imported
+            for (const auto& item : import.items) {
+                if (item == sym.name) {
+                    return true;
+                }
+            }
+        }
+    }
+    
+    return false;
+}
+
+void TypeChecker::collectModuleExports(Module& node) {
+    // Collect all exported symbols from this module
+    std::unordered_map<std::string, std::unique_ptr<Symbol>> module_exports;
+    
+    // Scan global scope for exported symbols
+    for (const auto& [name, symbol] : global_scope->getSymbols()) {
+        if (symbol->is_exported) {
+            // Create a copy of the symbol for the export table
+            auto exported_symbol = std::make_unique<Symbol>(
+                symbol->name,
+                std::make_unique<SemanticType>(*symbol->type),
+                symbol->is_mutable,
+                symbol->declaration_location
+            );
+            exported_symbol->declared_module = symbol->declared_module;
+            exported_symbol->is_exported = true;
+            exported_symbol->is_initialized = symbol->is_initialized;
+            
+            module_exports[name] = std::move(exported_symbol);
+        }
+    }
+    
+    exports_by_module[node.module_name] = std::move(module_exports);
+}
+
+void TypeChecker::injectImportsIntoScope(const Module& node) {
+    // Process imports and inject visible symbols into current scope
+    std::vector<ImportInfo> imports;
+    
+    for (const auto& import_decl : node.imports) {
+        ImportInfo info;
+        info.module_path = import_decl->module_path;
+        info.items = import_decl->imported_items;
+        info.is_wildcard = import_decl->is_wildcard;
+        imports.push_back(info);
+        
+        // Find exported symbols from the imported module
+        auto exports_it = exports_by_module.find(import_decl->module_path);
+        if (exports_it != exports_by_module.end()) {
+            for (const auto& [symbol_name, exported_symbol] : exports_it->second) {
+                // Check if this symbol should be imported
+                bool should_import = false;
+                
+                if (import_decl->is_wildcard) {
+                    should_import = true;
+                } else {
+                    // Check specific imports
+                    for (const auto& item : import_decl->imported_items) {
+                        if (item == symbol_name) {
+                            should_import = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if (should_import) {
+                    // Create a copy of the exported symbol and add to current scope
+                    auto imported_symbol = std::make_unique<Symbol>(
+                        exported_symbol->name,
+                        std::make_unique<SemanticType>(*exported_symbol->type),
+                        exported_symbol->is_mutable,
+                        exported_symbol->declaration_location
+                    );
+                    imported_symbol->declared_module = exported_symbol->declared_module;
+                    imported_symbol->is_exported = exported_symbol->is_exported;
+                    imported_symbol->is_initialized = exported_symbol->is_initialized;
+                    
+                    current_scope->define(symbol_name, std::move(imported_symbol));
+                }
+            }
+        }
+    }
+    
+    module_imports[node.module_name] = std::move(imports);
 }
 
 } // namespace pangea

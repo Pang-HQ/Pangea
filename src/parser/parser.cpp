@@ -111,7 +111,6 @@ void Parser::synchronize() {
             case TokenType::IF:
             case TokenType::WHILE:
             case TokenType::RETURN:
-            case TokenType::CONST:
             case TokenType::IMPORT:
             case TokenType::STRUCT:
             case TokenType::ENUM:
@@ -143,7 +142,6 @@ void Parser::synchronizeStatement() {
         // If we find tokens that typically start statements, stop here
         switch (peek().type) {
             case TokenType::LET:
-            case TokenType::CONST:
             case TokenType::IF:
             case TokenType::WHILE:
             case TokenType::FOR:
@@ -178,6 +176,7 @@ std::unique_ptr<Declaration> Parser::parseDeclaration() {
         if (match({TokenType::EXPORT})) {
             // Parse the exported declaration
             auto exported_decl = parseDeclaration();
+            exported_decl->is_exported = true;
             // For now, just return the declaration (export is handled at module level)
             return exported_decl;
         }
@@ -197,9 +196,11 @@ std::unique_ptr<Declaration> Parser::parseDeclaration() {
                 reportError("Foreign classes are not supported - C standard library has no classes");
                 return nullptr;
             }
-            if (match({TokenType::CONST})) {
-                return parseForeignConstDeclaration();
+            if (match({TokenType::LET})) {
+                bool is_mut = match({TokenType::MUT});
+                return parseForeignVariableDeclaration(is_mut);
             }
+
             reportError("Expected 'fn', 'struct', 'enum', or 'const' after 'foreign'");
             return nullptr;
         }
@@ -236,11 +237,8 @@ std::unique_ptr<Declaration> Parser::parseDeclaration() {
             return parseVariableDeclaration(false); // let variables are immutable
         }
         
-        if (match({TokenType::CONST})) {
-            return parseConstDeclaration();
-        }
-        
         reportError("Expected declaration");
+        synchronize(); // BUGFIX: prevent infinite loops if no decl is found
         return nullptr;
     } catch (const std::runtime_error&) {
         synchronize();
@@ -633,6 +631,11 @@ std::unique_ptr<Expression> Parser::parsePrimary() {
 
 // Type parsing
 std::unique_ptr<Type> Parser::parseType() {
+    if (match({TokenType::CONST})) {
+        auto base_type = parseType();
+        return std::make_unique<ConstType>(previous().location, std::move(base_type));
+    }
+
     // Handle nested pointer types: cptr, unique, shared, weak
     // This allows for types like: shared<unique<weak<Type>>, cptr<cptr<Type>>, etc.
     if (match({TokenType::CPTR, TokenType::UNIQUE, TokenType::SHARED, TokenType::WEAK})) {
@@ -736,8 +739,16 @@ std::vector<Parameter> Parser::parseParameterList() {
 
         if (check(TokenType::RIGHT_PAREN))
             break;
+
+        if (check(TokenType::NEWLINE)) {
+            skipNewlines();
+            if (check(TokenType::RIGHT_PAREN))
+                break;
+            
+            reportError("Expected ',' or ')' after parameter");
+        }
         
-        consume(TokenType::COMMA, "Expected ',' after parameter");
+        consume(TokenType::COMMA, "Expected ',' or ')' after parameter");
         skipNewlines();
     }
 
@@ -1049,35 +1060,18 @@ std::unique_ptr<EnumDeclaration> Parser::parseForeignEnumDeclaration() {
     return enum_decl;
 }
 
-std::unique_ptr<VariableDeclaration> Parser::parseConstDeclaration() {
-    Token name = consume(TokenType::IDENTIFIER, "Expected constant name");
-    
-    consume(TokenType::COLON, "Expected ':' after constant name");
-    auto type = parseType();
-    
-    consume(TokenType::ASSIGN, "Expected '=' after constant type");
-    auto initializer = parseExpression();
-    
-    consumeOptionalSemicolon();
-    
-    return std::make_unique<VariableDeclaration>(
-        name.location, name.lexeme, std::move(type), 
-        std::move(initializer), false // constants are immutable
-    );
-}
+std::unique_ptr<VariableDeclaration> Parser::parseForeignVariableDeclaration(bool is_mutable) {
+    Token name = consume(TokenType::IDENTIFIER, "Expected foreign variable name");
 
-std::unique_ptr<VariableDeclaration> Parser::parseForeignConstDeclaration() {
-    Token name = consume(TokenType::IDENTIFIER, "Expected foreign constant name");
-    
-    consume(TokenType::COLON, "Expected ':' after foreign constant name");
+    consume(TokenType::COLON, "Expected ':' after foreign variable name (inference is impossible for foreign variables)");
     auto type = parseType();
-    
-    // Foreign constants don't have initializers (they're defined in C)
+
+    // Foreign variables don't have initializers (they're defined in C)
     consumeOptionalSemicolon();
     
     return std::make_unique<VariableDeclaration>(
-        name.location, name.lexeme, std::move(type), 
-        nullptr, false // foreign constants are immutable
+        name.location, name.lexeme, std::move(type),
+        nullptr, is_mutable // foreign variables can be mutable or immutable
     );
 }
 

@@ -6,6 +6,7 @@ namespace pangea {
 
 // Forward declarations
 class PrimitiveType;
+class ConstType;
 class ArrayType;
 class PointerType;
 class GenericType;
@@ -42,6 +43,7 @@ public:
     
     // Type visitors
     virtual void visit(PrimitiveType& node) = 0;
+    virtual void visit(ConstType& node) = 0;
     virtual void visit(ArrayType& node) = 0;
     virtual void visit(PointerType& node) = 0;
     virtual void visit(GenericType& node) = 0;

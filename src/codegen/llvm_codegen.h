@@ -66,6 +66,7 @@ private:
     
     // Type visitors
     void visit(PrimitiveType& node) override;
+    void visit(ConstType& node) override;
     void visit(ArrayType& node) override;
     void visit(PointerType& node) override;
     void visit(GenericType& node) override;
@@ -119,6 +120,12 @@ private:
     bool isTypeIdentifier(const std::string& name);
     bool isRawVaListType(const Type& type);
     bool isStringLiteral(llvm::Value* value);
+    
+    // Type conversion helpers
+    bool isNumericType(llvm::Type* type);
+    std::pair<llvm::Value*, llvm::Value*> promoteToCommonType(llvm::Value* left, llvm::Value* right, const SourceLocation& location);
+    llvm::Type* getCommonNumericType(llvm::Type* left, llvm::Type* right);
+    int getNumericTypeRank(llvm::Type* type);
 };
 
 } // namespace pangea
