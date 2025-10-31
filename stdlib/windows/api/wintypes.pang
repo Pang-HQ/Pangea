@@ -1,0 +1,22 @@
+// Common Windows types used across modules
+export type BYTE       = u8
+export type WORD       = u16
+export type DWORD      = u32
+export type QWORD      = u64
+export type LONG       = i32
+export type ULONG      = u32
+export type LONGLONG   = i64
+export type ULONGLONG  = u64
+export type WCHAR      = u16
+export type BOOL       = i32
+export type HANDLE     = cptr<void>
+export type HWND       = HANDLE
+export type HMODULE    = HANDLE
+export type HINSTANCE  = HANDLE
+export type LPVOID     = cptr<void>
+export type LPCVOID    = cptr<const void>
+export type LPWSTR     = cptr<WCHAR>
+export type LPCWSTR    = cptr<const WCHAR>
+export type UINT       = u32
+export type SIZE_T     = usize
+export type SSIZE_T    = isize

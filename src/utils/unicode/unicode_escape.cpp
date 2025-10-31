@@ -43,7 +43,7 @@ std::string escape_string(
                     break;
                 }
                 case 'e': {
-                    escaped += '\e';
+                    escaped += '\x1b';
                     break;
                 }
                 case 'f': {
@@ -173,8 +173,8 @@ std::string unescape_string(
                 unescaped += "\\b";
                 break;
             }
-            case '\e': {
-                unescaped += "\\e";
+            case '\x1b': {
+                unescaped += "\\x1b";
                 break;
             }
             case '\f': {

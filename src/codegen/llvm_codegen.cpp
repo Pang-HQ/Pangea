@@ -152,7 +152,7 @@ void LLVMCodeGenerator::visit(IdentifierExpression& node) {
         setExpressionValue(node, func);
         return;
     }
-    
+
     // Check if it's a type identifier (class, struct, enum constructor)
     // These are handled specially in CallExpression for instantiation
     if (isTypeIdentifier(node.name)) {
@@ -163,208 +163,93 @@ void LLVMCodeGenerator::visit(IdentifierExpression& node) {
         setExpressionValue(node, type_placeholder);
         return;
     }
-    
-    // Then check if it's a variable
-    llvm::Value* value = named_values[node.name];
-    if (!value) {
+
+    // Then check if it's a variable using the improved symbol table
+    LLVMCodeGenerator::VariableInfo* var_info = lookupVariable(node.name);
+    if (!var_info) {
         reportCodegenError(node.location, "Unknown variable: " + node.name);
         return;
     }
-    
-    // Load the value if it's an alloca (variable)
+
+    llvm::Value* value = var_info->value;
+
+    // Load the value if it's an alloca (local variable) or global variable
     if (auto alloca = llvm::dyn_cast<llvm::AllocaInst>(value)) {
         value = builder->CreateLoad(alloca->getAllocatedType(), value, node.name);
+    } else if (auto global = llvm::dyn_cast<llvm::GlobalVariable>(value)) {
+        value = builder->CreateLoad(global->getValueType(), value, node.name);
     }
-    
+
     setExpressionValue(node, value);
 }
 
 void LLVMCodeGenerator::visit(BinaryExpression& node) {
+    // Generate code for both operands
     node.left->accept(*this);
     node.right->accept(*this);
-    
+
     llvm::Value* left_val = getExpressionValue(*node.left);
     llvm::Value* right_val = getExpressionValue(*node.right);
-    
+
     if (!left_val || !right_val) {
         reportCodegenError(node.location, "Invalid operands for binary expression");
         return;
     }
-    
-    // Handle mixed-type operations by promoting to common type
+
+    // Handle type promotion for mixed-type operations
     llvm::Type* left_type = left_val->getType();
     llvm::Type* right_type = right_val->getType();
-    
-    // If types are different and both are numeric, promote to common type
+    llvm::Type* common_type = nullptr;
+
     if (left_type != right_type && isNumericType(left_type) && isNumericType(right_type)) {
-        auto [promoted_left, promoted_right] = promoteToCommonType(left_val, right_val, node.location);
+        auto [promoted_left, promoted_right] = promoteToCommonType(left_val, right_val);
         if (!promoted_left || !promoted_right) {
             reportCodegenError(node.location, "Failed to promote operands to common type");
             return;
         }
         left_val = promoted_left;
         right_val = promoted_right;
-        left_type = left_val->getType();
-        right_type = right_val->getType();
-    }
-    
-    llvm::Value* result = nullptr;
-    
-    // Handle integer operations
-    if (left_type->isIntegerTy() && right_type->isIntegerTy()) {
-        switch (node.operator_token) {
-            case TokenType::PLUS:
-                result = builder->CreateAdd(left_val, right_val, "addtmp");
-                break;
-            case TokenType::MINUS:
-                result = builder->CreateSub(left_val, right_val, "subtmp");
-                break;
-            case TokenType::MULTIPLY:
-                result = builder->CreateMul(left_val, right_val, "multmp");
-                break;
-            case TokenType::DIVIDE:
-                result = builder->CreateSDiv(left_val, right_val, "divtmp");
-                break;
-            case TokenType::MODULO:
-                result = builder->CreateSRem(left_val, right_val, "modtmp");
-                break;
-            case TokenType::LESS:
-                result = builder->CreateICmpSLT(left_val, right_val, "cmptmp");
-                break;
-            case TokenType::LESS_EQUAL:
-                result = builder->CreateICmpSLE(left_val, right_val, "cmptmp");
-                break;
-            case TokenType::GREATER:
-                result = builder->CreateICmpSGT(left_val, right_val, "cmptmp");
-                break;
-            case TokenType::GREATER_EQUAL:
-                result = builder->CreateICmpSGE(left_val, right_val, "cmptmp");
-                break;
-            case TokenType::EQUAL:
-                result = builder->CreateICmpEQ(left_val, right_val, "cmptmp");
-                break;
-            case TokenType::NOT_EQUAL:
-                result = builder->CreateICmpNE(left_val, right_val, "cmptmp");
-                break;
-            case TokenType::POWER:
-                // For now, implement power as repeated multiplication for small integer powers
-                // TODO: Use proper power function for general case
-                reportCodegenError(node.location, "Power operator not yet fully implemented");
-                return;
-            case TokenType::BITWISE_LEFT_SHIFT:
-                result = builder->CreateShl(left_val, right_val, "shltmp");
-                break;
-            case TokenType::BITWISE_RIGHT_SHIFT:
-                result = builder->CreateAShr(left_val, right_val, "ashrtmp");
-                break;
-            default:
-                reportCodegenError(node.location, "Unknown binary operator for integers");
-                return;
-        }
-    }
-    // Handle floating point operations
-    else if (left_val->getType()->isFloatingPointTy() && right_val->getType()->isFloatingPointTy()) {
-        switch (node.operator_token) {
-            case TokenType::PLUS:
-                result = builder->CreateFAdd(left_val, right_val, "addtmp");
-                break;
-            case TokenType::MINUS:
-                result = builder->CreateFSub(left_val, right_val, "subtmp");
-                break;
-            case TokenType::MULTIPLY:
-                result = builder->CreateFMul(left_val, right_val, "multmp");
-                break;
-            case TokenType::DIVIDE:
-                result = builder->CreateFDiv(left_val, right_val, "divtmp");
-                break;
-            case TokenType::LESS:
-                result = builder->CreateFCmpOLT(left_val, right_val, "cmptmp");
-                break;
-            case TokenType::LESS_EQUAL:
-                result = builder->CreateFCmpOLE(left_val, right_val, "cmptmp");
-                break;
-            case TokenType::GREATER:
-                result = builder->CreateFCmpOGT(left_val, right_val, "cmptmp");
-                break;
-            case TokenType::GREATER_EQUAL:
-                result = builder->CreateFCmpOGE(left_val, right_val, "cmptmp");
-                break;
-            case TokenType::EQUAL:
-                result = builder->CreateFCmpOEQ(left_val, right_val, "cmptmp");
-                break;
-            case TokenType::NOT_EQUAL:
-                result = builder->CreateFCmpONE(left_val, right_val, "cmptmp");
-                break;
-            default:
-                reportCodegenError(node.location, "Unknown binary operator for floats");
-                return;
-        }
-    }
-    // Handle boolean operations
-    else if (left_val->getType()->isIntegerTy(1) && right_val->getType()->isIntegerTy(1)) {
-        switch (node.operator_token) {
-            case TokenType::LOGICAL_AND:
-                result = builder->CreateAnd(left_val, right_val, "andtmp");
-                break;
-            case TokenType::LOGICAL_OR:
-                result = builder->CreateOr(left_val, right_val, "ortmp");
-                break;
-            default:
-                reportCodegenError(node.location, "Unknown binary operator for booleans");
-                return;
-        }
-    }
-    // Handle logical operations on integers (treat non-zero as true)
-    else if (left_val->getType()->isIntegerTy() && right_val->getType()->isIntegerTy() && 
-             (node.operator_token == TokenType::LOGICAL_AND || node.operator_token == TokenType::LOGICAL_OR)) {
-        // Convert integers to boolean (non-zero = true, zero = false)
-        llvm::Value* left_bool = builder->CreateICmpNE(left_val, 
-            llvm::ConstantInt::get(left_val->getType(), 0), "left_bool");
-        llvm::Value* right_bool = builder->CreateICmpNE(right_val, 
-            llvm::ConstantInt::get(right_val->getType(), 0), "right_bool");
-        
-        switch (node.operator_token) {
-            case TokenType::LOGICAL_AND:
-                result = builder->CreateAnd(left_bool, right_bool, "andtmp");
-                break;
-            case TokenType::LOGICAL_OR:
-                result = builder->CreateOr(left_bool, right_bool, "ortmp");
-                break;
-        }
-    }
-    // Handle pointer comparisons (including null comparisons)
-    else if (left_val->getType()->isPointerTy() && right_val->getType()->isPointerTy()) {
-        switch (node.operator_token) {
-            case TokenType::EQUAL:
-                result = builder->CreateICmpEQ(left_val, right_val, "cmptmp");
-                break;
-            case TokenType::NOT_EQUAL:
-                result = builder->CreateICmpNE(left_val, right_val, "cmptmp");
-                break;
-            default:
-                reportCodegenError(node.location, "Unsupported pointer comparison operator");
-                return;
-        }
-    }
-    // Handle pointer-to-null comparisons (when one operand is pointer, other is null)
-    else if ((left_val->getType()->isPointerTy() && llvm::isa<llvm::ConstantPointerNull>(right_val)) ||
-             (right_val->getType()->isPointerTy() && llvm::isa<llvm::ConstantPointerNull>(left_val))) {
-        switch (node.operator_token) {
-            case TokenType::EQUAL:
-                result = builder->CreateICmpEQ(left_val, right_val, "cmptmp");
-                break;
-            case TokenType::NOT_EQUAL:
-                result = builder->CreateICmpNE(left_val, right_val, "cmptmp");
-                break;
-            default:
-                reportCodegenError(node.location, "Unsupported pointer-to-null comparison operator");
-                return;
-        }
+        common_type = left_val->getType();
     } else {
-        reportCodegenError(node.location, "Type mismatch in binary expression");
+        common_type = left_type;
+    }
+
+    llvm::Value* result = nullptr;
+
+    // Handle special case operators
+    if (node.operator_token == TokenType::POWER) {
+        reportCodegenError(node.location, "Power operator not yet fully implemented");
         return;
     }
-    
+
+    // Try arithmetic operations first (covers int/float/bitwise)
+    result = generateArithmeticOperation(node.operator_token, left_val, right_val, common_type);
+
+    // If not arithmetic, try comparisons
+    if (!result) {
+        result = generateComparisonOperation(node.operator_token, left_val, right_val);
+    }
+
+    // If not comparison, try boolean operations
+    if (!result) {
+        result = generateBooleanOperation(node.operator_token, left_val, right_val);
+    }
+
+    // Handle pointer comparisons
+    if (!result && (left_type->isPointerTy() || right_type->isPointerTy())) {
+        TokenType op = node.operator_token;
+        if (op != TokenType::EQUAL && op != TokenType::NOT_EQUAL) {
+            reportCodegenError(node.location, "Unsupported pointer comparison operator");
+            return;
+        }
+        result = generateComparisonOperation(op, left_val, right_val);
+    }
+
+    if (!result) {
+        reportCodegenError(node.location, "Unsupported binary operator or type combination");
+        return;
+    }
+
     setExpressionValue(node, result);
 }
 
@@ -529,26 +414,30 @@ void LLVMCodeGenerator::visit(IndexExpression& node) {
 }
 
 void LLVMCodeGenerator::visit(AssignmentExpression& node) {
+    // Generate code for right-hand side
     node.right->accept(*this);
     llvm::Value* right_val = getExpressionValue(*node.right);
     if (!right_val) {
         reportCodegenError(node.location, "Invalid right-hand side of assignment");
         return;
     }
-    
+
     // For now, only support identifier assignments
     auto identifier = dynamic_cast<IdentifierExpression*>(node.left.get());
     if (!identifier) {
         reportCodegenError(node.location, "Complex left-hand side assignments not yet supported");
         return;
     }
-    
-    llvm::Value* var = named_values[identifier->name];
-    if (!var) {
+
+    // Use improved variable lookup system
+    VariableInfo* var_info = lookupVariable(identifier->name);
+    if (!var_info) {
         reportCodegenError(node.location, "Unknown variable: " + identifier->name);
         return;
     }
-    
+
+    llvm::Value* var = var_info->value;
+
     // Handle compound assignments
     if (node.operator_token != TokenType::ASSIGN) {
         // Load current value
@@ -558,56 +447,35 @@ void LLVMCodeGenerator::visit(AssignmentExpression& node) {
         } else {
             current_val = var;
         }
-        
-        // Perform the compound operation
-        llvm::Value* result = nullptr;
-        switch (node.operator_token) {
-            case TokenType::PLUS_ASSIGN:
-                if (current_val->getType()->isIntegerTy()) {
-                    result = builder->CreateAdd(current_val, right_val, "addassign");
-                } else if (current_val->getType()->isFloatingPointTy()) {
-                    result = builder->CreateFAdd(current_val, right_val, "addassign");
-                }
-                break;
-            case TokenType::MINUS_ASSIGN:
-                if (current_val->getType()->isIntegerTy()) {
-                    result = builder->CreateSub(current_val, right_val, "subassign");
-                } else if (current_val->getType()->isFloatingPointTy()) {
-                    result = builder->CreateFSub(current_val, right_val, "subassign");
-                }
-                break;
-            case TokenType::MULTIPLY_ASSIGN:
-                if (current_val->getType()->isIntegerTy()) {
-                    result = builder->CreateMul(current_val, right_val, "mulassign");
-                } else if (current_val->getType()->isFloatingPointTy()) {
-                    result = builder->CreateFMul(current_val, right_val, "mulassign");
-                }
-                break;
-            case TokenType::DIVIDE_ASSIGN:
-                if (current_val->getType()->isIntegerTy()) {
-                    result = builder->CreateSDiv(current_val, right_val, "divassign");
-                } else if (current_val->getType()->isFloatingPointTy()) {
-                    result = builder->CreateFDiv(current_val, right_val, "divassign");
-                }
-                break;
-            case TokenType::MODULO_ASSIGN:
-                if (current_val->getType()->isIntegerTy()) {
-                    result = builder->CreateSRem(current_val, right_val, "modassign");
-                }
-                break;
-            default:
-                reportCodegenError(node.location, "Unknown compound assignment operator");
+
+        // Handle type promotion for compound assignment
+        llvm::Type* current_type = current_val->getType();
+        llvm::Type* right_type = right_val->getType();
+        llvm::Type* common_type = nullptr;
+
+        if (current_type != right_type && isNumericType(current_type) && isNumericType(right_type)) {
+            auto [promoted_current, promoted_right] = promoteToCommonType(current_val, right_val);
+            if (!promoted_current || !promoted_right) {
+                reportCodegenError(node.location, "Failed to promote operands for compound assignment");
                 return;
+            }
+            current_val = promoted_current;
+            right_val = promoted_right;
+            common_type = current_val->getType();
+        } else {
+            common_type = current_type;
         }
-        
-        if (!result) {
-            reportCodegenError(node.location, "Invalid compound assignment operation");
+
+        // Use the DRY arithmetic operation helper
+        right_val = generateArithmeticOperation(node.operator_token, current_val, right_val, common_type);
+
+        if (!right_val) {
+            reportCodegenError(node.location,
+                "Invalid compound assignment operation or unsupported type combination");
             return;
         }
-        
-        right_val = result;
     }
-    
+
     // Store the value
     if (auto alloca = llvm::dyn_cast<llvm::AllocaInst>(var)) {
         builder->CreateStore(right_val, alloca);
@@ -615,7 +483,7 @@ void LLVMCodeGenerator::visit(AssignmentExpression& node) {
         reportCodegenError(node.location, "Cannot assign to non-variable");
         return;
     }
-    
+
     // Assignment expression evaluates to the assigned value
     setExpressionValue(node, right_val);
 }
@@ -628,11 +496,14 @@ void LLVMCodeGenerator::visit(PostfixExpression& node) {
         return;
     }
     
-    llvm::Value* var = named_values[identifier->name];
-    if (!var) {
+    // Use improved variable lookup for postfix expression
+    LLVMCodeGenerator::VariableInfo* var_info = lookupVariable(identifier->name);
+    if (!var_info) {
         reportCodegenError(node.location, "Unknown variable: " + identifier->name);
         return;
     }
+
+    llvm::Value* var = var_info->value;
     
     // Load current value
     llvm::Value* current_val = nullptr;
@@ -902,18 +773,15 @@ void LLVMCodeGenerator::visit(BlockStatement& node) {
 
 void LLVMCodeGenerator::visit(IfStatement& node) {
     node.condition->accept(*this);
-    
+
     llvm::Value* condition_val = getExpressionValue(*node.condition);
     if (!condition_val) {
         reportCodegenError(node.condition->location, "Invalid condition");
         return;
     }
-    
-    // Convert condition to boolean if necessary
-    if (!condition_val->getType()->isIntegerTy(1)) {
-        condition_val = builder->CreateICmpNE(condition_val, 
-            llvm::ConstantInt::get(condition_val->getType(), 0), "ifcond");
-    }
+
+    // Use DRY condition evaluation helper
+    condition_val = evaluateCondition(condition_val);
     
     llvm::Function* function = builder->GetInsertBlock()->getParent();
     
@@ -980,11 +848,8 @@ void LLVMCodeGenerator::visit(WhileStatement& node) {
         return;
     }
     
-    // Convert condition to boolean if necessary
-    if (!condition_val->getType()->isIntegerTy(1)) {
-        condition_val = builder->CreateICmpNE(condition_val, 
-            llvm::ConstantInt::get(condition_val->getType(), 0), "loopcond");
-    }
+    // Use DRY condition evaluation helper
+    condition_val = evaluateCondition(condition_val);
     
     builder->CreateCondBr(condition_val, body_block, after_block);
     
@@ -1096,14 +961,15 @@ void LLVMCodeGenerator::visit(FunctionDeclaration& node) {
         current_function = function;
         
         // Create allocas for parameters
-        auto old_named_values = named_values;
+        enterFunctionScope(function);
         arg_it = function->arg_begin();
         for (size_t i = 0; i < node.parameters.size() && i < param_types.size(); ++i, ++arg_it) {
             llvm::AllocaInst* alloca = builder->CreateAlloca(arg_it->getType(), nullptr, node.parameters[i].name);
             builder->CreateStore(&*arg_it, alloca);
-            named_values[node.parameters[i].name] = alloca;
+            VariableInfo param_info(alloca, false, node.location, false, false);
+            declareVariable(node.parameters[i].name, std::move(param_info));
         }
-        
+
         // Generate function body
         node.body->accept(*this);
         
@@ -1113,118 +979,117 @@ void LLVMCodeGenerator::visit(FunctionDeclaration& node) {
         }
         
         // Restore previous state
-        named_values = old_named_values;
+        exitFunctionScope();
         current_function = old_function;
     }
 }
 
 void LLVMCodeGenerator::visit(VariableDeclaration& node) {
-    // Check for global context:
-    if (!current_function) {
-        if (!node.initializer) {
-            if (!node.type) {
-                reportCodegenError(node.location, "Global variable must have a type or initializer");
-                return;
-            }
+    const bool is_const = dynamic_cast<ConstType*>(node.type.get()) != nullptr;
+    const bool is_exported = node.is_exported;
 
-            // Foreign variables are not initialised
-            // therefore this node must be foreign
-
-            // Add to symbol table
-            llvm::Value *g = new llvm::GlobalVariable(
-                *module,
-                convertType(*node.type),
-                dynamic_cast<ConstType*>(node.type.get()) != nullptr,
-                llvm::GlobalValue::ExternalLinkage, // Foreign variables are always externally linked
-                nullptr,
-                llvm::Twine(node.name)
-            );
-
-            named_values[node.name] = g;
-
-            return;
-        }
-
-        auto linkage = node.is_exported
-            ? llvm::GlobalValue::ExternalLinkage
-            : llvm::GlobalValue::InternalLinkage;
-        
-
-        llvm::Value* init_val = nullptr;
-
-        
-        node.initializer->accept(*this);
-        init_val = getExpressionValue(*node.initializer);
-
-        if (!init_val) {
-            reportCodegenError(node.location, "Invalid initializer for global");
-            return;
-        }
-
-        if (!llvm::isa<llvm::Constant>(init_val)) {
-            reportCodegenError(node.location, "Global initializer must be a constant");
-            return;
-        }
-
-        llvm::Type* type = nullptr;
-
-        if (node.type) {
-            type = convertType(*node.type);
-        } else {
-            type = init_val->getType();
-        }
-
-        if (init_val->getType() != type) {
-            reportCodegenError(node.location, "Global initializer type does not match variable type");
-            return;
-        }
-
-        auto* g = new llvm::GlobalVariable(
-            *module,
-            type,
-            dynamic_cast<ConstType*>(node.type.get()) != nullptr,
-            linkage,
-            llvm::cast<llvm::Constant>(init_val),
-            llvm::Twine(node.name)
-        );
-
-        // register symbol for imports
-        named_values[node.name] = g;
-
-        return;
-    }
-    
-    llvm::Type* var_type = nullptr;
-    
-    if (node.type) {
-        var_type = convertType(*node.type);
-    }
-    
+    // Evaluate initializer if present
     llvm::Value* init_val = nullptr;
     if (node.initializer) {
         node.initializer->accept(*this);
         init_val = getExpressionValue(*node.initializer);
-        
-        if (!var_type && init_val) {
-            var_type = init_val->getType();
+
+        // Enhanced initializer handling with better global constant resolution
+        if (!init_val) {
+            if (auto id_expr = dynamic_cast<IdentifierExpression*>(node.initializer.get())) {
+                // First check if it's a local or global variable in new system
+                VariableInfo* var_info = lookupVariable(id_expr->name);
+                
+                if (!var_info) {
+                    reportCodegenError(node.initializer->location, "Invalid initializer for variable: " + node.name);
+                    return;
+                }
+
+                init_val = var_info->value;
+            }
+        }
+
+        // Enhanced constant resolution for global variables
+        if (auto *gv = llvm::dyn_cast_or_null<llvm::GlobalVariable>(init_val)) {
+            if (gv->isConstant() && gv->hasInitializer()) {
+                init_val = gv->getInitializer();
+            }
         }
     }
-    
+
+    // Determine the variable's type
+    llvm::Type* var_type = node.type ? convertType(*node.type) : (init_val ? init_val->getType() : nullptr);
     if (!var_type) {
-        reportCodegenError(node.location, "Cannot determine variable type");
+        reportCodegenError(node.location, "Cannot determine type for variable: " + node.name);
         return;
     }
-    
-    // Create alloca for the variable (only works inside functions)
-    llvm::AllocaInst* alloca = builder->CreateAlloca(var_type, nullptr, node.name);
-    
-    // Store initial value if provided
-    if (init_val) {
-        builder->CreateStore(init_val, alloca);
+
+    // Handle global variables
+    if (!current_function) {
+        llvm::Constant* init_const = init_val ? llvm::dyn_cast<llvm::Constant>(init_val) : nullptr;
+        if (node.initializer && !init_const) {
+            reportCodegenError(node.location, "Global initializer must be a constant: " + node.name);
+            return;
+        }
+
+        auto linkage = is_exported ? llvm::GlobalValue::ExternalLinkage
+                                   : llvm::GlobalValue::InternalLinkage;
+
+        auto *g = new llvm::GlobalVariable(*module, var_type, is_const, linkage, init_const, node.name);
+        VariableInfo global_info(g, is_const, node.location, is_exported, true);
+        declareVariable(node.name, std::move(global_info));
+        return;
     }
-    
-    // Add to symbol table
-    named_values[node.name] = alloca;
+
+    // Handle local constants (fold into LLVM Constant)
+    if (is_const && init_val) {
+        llvm::Constant* folded = llvm::dyn_cast<llvm::Constant>(init_val);
+        if (!folded) {
+            // Try to fold integer literals or global constants
+            if (auto gv = llvm::dyn_cast<llvm::GlobalVariable>(init_val)) {
+                if (gv->isConstant() && gv->hasInitializer()) {
+                    folded = gv->getInitializer();
+                }
+            }
+        }
+
+        if (folded) {
+            // Cast to correct type if necessary
+            if (folded->getType() != var_type) {
+                if (folded->getType()->isIntegerTy() && var_type->isIntegerTy()) {
+                    folded = llvm::ConstantExpr::getCast(llvm::Instruction::ZExt, folded, var_type);
+                } else {
+                    folded = llvm::ConstantExpr::getCast(llvm::Instruction::BitCast, folded, var_type);
+                }
+            }
+
+            VariableInfo const_info(folded, true, node.location, false, false);
+            declareVariable(node.name, std::move(const_info));
+            return;
+        }
+        // Fall through to alloca+store if initializer isn't a constant
+    }
+
+    // Normal mutable local variable: alloca + store
+    llvm::AllocaInst* alloca = builder->CreateAlloca(var_type, nullptr, node.name);
+    if (init_val) {
+        llvm::Value* to_store = init_val;
+        if (to_store->getType() != var_type) {
+            if (var_type->isIntegerTy() && to_store->getType()->isIntegerTy()) {
+                unsigned s = llvm::cast<llvm::IntegerType>(to_store->getType())->getBitWidth();
+                unsigned d = llvm::cast<llvm::IntegerType>(var_type)->getBitWidth();
+                if (s > d) to_store = builder->CreateTrunc(to_store, var_type, "trunc");
+                else if (s < d) to_store = builder->CreateSExt(to_store, var_type, "sext");
+                else to_store = builder->CreateBitCast(to_store, var_type, "bitcast");
+            } else {
+                to_store = builder->CreateBitCast(to_store, var_type, "bitcast");
+            }
+        }
+        builder->CreateStore(to_store, alloca);
+    }
+
+    VariableInfo var_info(alloca, false, node.location, false, false);
+    declareVariable(node.name, std::move(var_info));
 }
 
 void LLVMCodeGenerator::visit(ImportDeclaration& node) {
@@ -1343,13 +1208,288 @@ llvm::Type* LLVMCodeGenerator::getPrimitiveType(TokenType token_type) {
 }
 
 llvm::Value* LLVMCodeGenerator::getExpressionValue(Expression& expr) {
-    auto it = expression_values.find(&expr);
-    return (it != expression_values.end()) ? it->second : nullptr;
+    // Check if we already stored a value for this expression
+    auto it = expression_cache.find(&expr);
+    if (it != expression_cache.end())
+        return it->second;
+
+    return nullptr;
 }
 
 void LLVMCodeGenerator::setExpressionValue(Expression& expr, llvm::Value* value) {
-    expression_values[&expr] = value;
+    expression_cache[&expr] = value;
 }
+
+// ===== NEW VARIABLE MANAGEMENT METHODS =====
+
+// Note: VariableInfo is defined inside the LLVMCodeGenerator class
+// Use full qualification in implementation
+LLVMCodeGenerator::VariableInfo* LLVMCodeGenerator::declareVariable(const std::string& name, VariableInfo&& info) {
+    // For local variables (function context), register in local scope
+    if (current_function && !info.is_global) {
+        if (!local_scopes.empty()) {
+            auto& current_scope = local_scopes.back();
+            auto result = current_scope.emplace(name, nullptr);
+            if (result.second) { // If inserted successfully (first time)
+                // Store the actual info in a scoped location within the global symbol table
+                std::string scoped_name = std::string("__local_") + std::to_string(reinterpret_cast<uintptr_t>(current_function)) + "_" + name;
+                auto global_result = symbol_table.emplace(scoped_name, std::move(info));
+                result.first->second = &global_result.first->second;
+                return &global_result.first->second;
+            }
+        }
+    }
+
+    // Global variables go directly in symbol table
+    auto result = symbol_table.emplace(name, std::move(info));
+    return &result.first->second;
+}
+
+LLVMCodeGenerator::VariableInfo* LLVMCodeGenerator::lookupVariable(const std::string& name) {
+    // First check current scope
+    if (!local_scopes.empty()) {
+        for (auto scope_it = local_scopes.rbegin(); scope_it != local_scopes.rend(); ++scope_it) {
+            auto it = scope_it->find(name);
+            if (it != scope_it->end()) {
+                return it->second;
+            }
+        }
+    }
+
+    // Then check global symbol table
+    auto it = symbol_table.find(name);
+    if (it != symbol_table.end()) {
+        return &it->second;
+    }
+
+    return nullptr;
+}
+
+const LLVMCodeGenerator::VariableInfo* LLVMCodeGenerator::lookupVariable(const std::string& name) const {
+    return const_cast<LLVMCodeGenerator*>(this)->lookupVariable(name);
+}
+
+bool LLVMCodeGenerator::hasVariable(const std::string& name) const {
+    return lookupVariable(name) != nullptr;
+}
+
+void LLVMCodeGenerator::enterScope() {
+    local_scopes.emplace_back();
+}
+
+void LLVMCodeGenerator::exitScope() {
+    if (!local_scopes.empty()) {
+        local_scopes.pop_back();
+    }
+}
+
+void LLVMCodeGenerator::enterFunctionScope(llvm::Function* function) {
+    current_function = function;
+    enterScope();
+}
+
+void LLVMCodeGenerator::exitFunctionScope() {
+    exitScope();
+    current_function = nullptr;
+}
+
+bool LLVMCodeGenerator::canVariableBeGlobalInitializer(const VariableInfo& var) const {
+    return var.value && (
+        llvm::isa<llvm::Constant>(var.value) ||
+        (llvm::isa<llvm::GlobalVariable>(var.value) &&
+         llvm::cast<llvm::GlobalVariable>(var.value)->isConstant())
+    );
+}
+
+llvm::Value* LLVMCodeGenerator::resolveInitializerValue(llvm::Value* initializer_val, SourceLocation location) {
+    // If this is a reference to a global constant, resolve it now
+    if (auto *gv = llvm::dyn_cast_or_null<llvm::GlobalVariable>(initializer_val)) {
+        if (gv->isConstant() && gv->hasInitializer()) {
+            return gv->getInitializer();
+        }
+    }
+
+    // For identifiers that aren't found in expression cache, check named values
+    if (!initializer_val) {
+        // This is a fallback for cases where we need to resolve an identifier
+        // that wasn't processed through normal expression evaluation
+        reportCodegenError(location, "Unable to resolve initializer value");
+        return nullptr;
+    }
+
+    return initializer_val;
+}
+
+llvm::AllocaInst* LLVMCodeGenerator::createLocalVariable(const std::string& name, llvm::Type* type, const SourceLocation& location) {
+    if (!current_function) {
+        reportCodegenError(location, "Cannot create local variable outside of function context: " + name);
+        return nullptr;
+    }
+
+    llvm::AllocaInst* alloca = builder->CreateAlloca(type, nullptr, name);
+    VariableInfo info(alloca, false, location, false, false);
+    declareVariable(name, std::move(info));
+    return alloca;
+}
+
+llvm::GlobalVariable* LLVMCodeGenerator::createGlobalVariable(const std::string& name, llvm::Type* type,
+                                                             llvm::Constant* initializer, bool is_const,
+                                                             bool is_exported, const SourceLocation& location) {
+    auto linkage = is_exported ? llvm::GlobalValue::ExternalLinkage : llvm::GlobalValue::InternalLinkage;
+    auto* global_var = new llvm::GlobalVariable(*module, type, is_const, linkage, initializer, name);
+    VariableInfo info(global_var, is_const, location, is_exported, true);
+    declareVariable(name, std::move(info));
+    return global_var;
+}
+
+// Binary operations helpers
+
+llvm::Value* LLVMCodeGenerator::generateArithmeticOperation(TokenType op,
+                                                          llvm::Value* left_val,
+                                                          llvm::Value* right_val,
+                                                          const llvm::Type* common_type) {
+    // Handle integer operations
+    if (common_type->isIntegerTy()) {
+        switch (op) {
+            case TokenType::PLUS:
+                return builder->CreateAdd(left_val, right_val, "addtmp");
+            case TokenType::MINUS:
+                return builder->CreateSub(left_val, right_val, "subtmp");
+            case TokenType::MULTIPLY:
+                return builder->CreateMul(left_val, right_val, "multmp");
+            case TokenType::DIVIDE:
+                return builder->CreateSDiv(left_val, right_val, "divtmp");
+            case TokenType::MODULO:
+                return builder->CreateSRem(left_val, right_val, "modtmp");
+            case TokenType::BITWISE_LEFT_SHIFT:
+                return builder->CreateShl(left_val, right_val, "shltmp");
+            case TokenType::BITWISE_RIGHT_SHIFT:
+                return builder->CreateAShr(left_val, right_val, "ashrtmp");
+            default:
+                return nullptr; // Not an arithmetic operator
+        }
+    }
+    // Handle floating-point operations
+    else if (common_type->isFloatingPointTy()) {
+        switch (op) {
+            case TokenType::PLUS:
+                return builder->CreateFAdd(left_val, right_val, "addtmp");
+            case TokenType::MINUS:
+                return builder->CreateFSub(left_val, right_val, "subtmp");
+            case TokenType::MULTIPLY:
+                return builder->CreateFMul(left_val, right_val, "multmp");
+            case TokenType::DIVIDE:
+                return builder->CreateFDiv(left_val, right_val, "divtmp");
+            default:
+                return nullptr; // Not an arithmetic operator
+        }
+    }
+    return nullptr;
+}
+
+llvm::Value* LLVMCodeGenerator::generateComparisonOperation(TokenType op,
+                                                          llvm::Value* left_val,
+                                                          llvm::Value* right_val) {
+    llvm::Type* left_type = left_val->getType();
+
+    // Handle integer comparisons
+    if (left_type->isIntegerTy() && !left_type->isIntegerTy(1)) {
+        switch (op) {
+            case TokenType::LESS:
+                return builder->CreateICmpSLT(left_val, right_val, "cmptmp");
+            case TokenType::LESS_EQUAL:
+                return builder->CreateICmpSLE(left_val, right_val, "cmptmp");
+            case TokenType::GREATER:
+                return builder->CreateICmpSGT(left_val, right_val, "cmptmp");
+            case TokenType::GREATER_EQUAL:
+                return builder->CreateICmpSGE(left_val, right_val, "cmptmp");
+            case TokenType::EQUAL:
+                return builder->CreateICmpEQ(left_val, right_val, "cmptmp");
+            case TokenType::NOT_EQUAL:
+                return builder->CreateICmpNE(left_val, right_val, "cmptmp");
+            default:
+                return nullptr;
+        }
+    }
+    // Handle floating-point comparisons
+    else if (left_type->isFloatingPointTy()) {
+        switch (op) {
+            case TokenType::LESS:
+                return builder->CreateFCmpOLT(left_val, right_val, "cmptmp");
+            case TokenType::LESS_EQUAL:
+                return builder->CreateFCmpOLE(left_val, right_val, "cmptmp");
+            case TokenType::GREATER:
+                return builder->CreateFCmpOGT(left_val, right_val, "cmptmp");
+            case TokenType::GREATER_EQUAL:
+                return builder->CreateFCmpOGE(left_val, right_val, "cmptmp");
+            case TokenType::EQUAL:
+                return builder->CreateFCmpOEQ(left_val, right_val, "cmptmp");
+            case TokenType::NOT_EQUAL:
+                return builder->CreateFCmpONE(left_val, right_val, "cmptmp");
+            default:
+                return nullptr;
+        }
+    }
+    // Handle pointer comparisons (including null comparisons)
+    else if (left_type->isPointerTy() || right_val->getType()->isPointerTy()) {
+        switch (op) {
+            case TokenType::EQUAL:
+                return builder->CreateICmpEQ(left_val, right_val, "cmptmp");
+            case TokenType::NOT_EQUAL:
+                return builder->CreateICmpNE(left_val, right_val, "cmptmp");
+            default:
+                return nullptr; // Unsupported pointer comparison
+        }
+    }
+    return nullptr;
+}
+
+llvm::Value* LLVMCodeGenerator::generateBooleanOperation(TokenType op,
+                                                        llvm::Value* left_val,
+                                                        llvm::Value* right_val) {
+    llvm::Type* left_type = left_val->getType();
+
+    // Handle boolean operations (i1 type)
+    if (left_type->isIntegerTy(1)) {
+        switch (op) {
+            case TokenType::LOGICAL_AND:
+                return builder->CreateAnd(left_val, right_val, "andtmp");
+            case TokenType::LOGICAL_OR:
+                return builder->CreateOr(left_val, right_val, "ortmp");
+            default:
+                return nullptr;
+        }
+    }
+    // Handle logical operations on non-boolean integers (treat non-zero as true)
+    else if (left_type->isIntegerTy()) {
+        // Convert integers to boolean (non-zero = true, zero = false)
+        llvm::Value* left_bool = builder->CreateICmpNE(left_val,
+            llvm::ConstantInt::get(left_type, 0), "left_bool");
+        llvm::Value* right_bool = builder->CreateICmpNE(right_val,
+            llvm::ConstantInt::get(right_val->getType(), 0), "right_bool");
+
+        switch (op) {
+            case TokenType::LOGICAL_AND:
+                return builder->CreateAnd(left_bool, right_bool, "andtmp");
+            case TokenType::LOGICAL_OR:
+                return builder->CreateOr(left_bool, right_bool, "ortmp");
+            default:
+                return nullptr;
+        }
+    }
+    return nullptr;
+}
+
+llvm::Value* LLVMCodeGenerator::evaluateCondition(llvm::Value* condition_val) {
+    // Convert condition to boolean if necessary
+    if (!condition_val->getType()->isIntegerTy(1)) {
+        condition_val = builder->CreateICmpNE(condition_val,
+            llvm::ConstantInt::get(condition_val->getType(), 0), "ifcond");
+    }
+    return condition_val;
+}
+
+
 
 void LLVMCodeGenerator::reportCodegenError(const SourceLocation& location, const std::string& message) {
     if (error_reporter) {
@@ -1365,289 +1505,6 @@ llvm::Function* LLVMCodeGenerator::createFunction(const std::string& name, llvm:
 llvm::BasicBlock* LLVMCodeGenerator::createBasicBlock(const std::string& name, llvm::Function* func) {
     if (!func) func = current_function;
     return llvm::BasicBlock::Create(*context, name, func);
-}
-
-bool LLVMCodeGenerator::compileToExecutable(const std::string& filename) {
-    logVerbose("Starting cross-platform executable compilation for: " + filename);
-    
-    // Determine the correct executable filename with platform-specific extension
-    std::string exe_filename = filename;
-    std::string os = detectOperatingSystem();
-    
-    if (os == "Windows" && !exe_filename.ends_with(".exe")) {
-        exe_filename += ".exe";
-    }
-    
-    logVerbose("Target OS detected: " + os);
-    logVerbose("Output executable: " + exe_filename);
-    
-    // Generate object file first
-    std::string obj_filename = filename + ".o";
-    logVerbose("Generating object file: " + obj_filename);
-    
-    if (!compileToObjectFile(obj_filename)) {
-        logVerbose("Failed to generate object file");
-        return false;
-    }
-    
-    logVerbose("Object file generated successfully");
-    
-    // Use the new cross-platform linking function
-    bool success = linkObjectToExecutable(obj_filename, exe_filename);
-    
-    if (success) {
-        logVerbose("Executable created successfully: " + exe_filename);
-    } else {
-        logVerbose("Failed to create executable");
-    }
-    
-    return success;
-}
-
-
-bool LLVMCodeGenerator::compileToObjectFile(const std::string& filename) {
-    // Initialize LLVM targets if not already done
-    llvm::InitializeAllTargetInfos();
-    llvm::InitializeAllTargets();
-    llvm::InitializeAllTargetMCs();
-    llvm::InitializeAllAsmParsers();
-    llvm::InitializeAllAsmPrinters();
-    
-    // Get the target triple for the current system
-    std::string target_triple = llvm::sys::getDefaultTargetTriple();
-    module->setTargetTriple(target_triple);
-    
-    std::string error;
-    const llvm::Target* target = llvm::TargetRegistry::lookupTarget(target_triple, error);
-    
-    if (!target) {
-        reportCodegenError(SourceLocation(), "Failed to lookup target: " + error);
-        return false;
-    }
-    
-    // Create target machine
-    llvm::TargetOptions opt;
-    auto reloc_model = std::optional<llvm::Reloc::Model>();
-    llvm::TargetMachine* target_machine = target->createTargetMachine(
-        target_triple, "generic", "", opt, reloc_model);
-    
-    module->setDataLayout(target_machine->createDataLayout());
-    
-    // Open output file
-    std::error_code error_code;
-    llvm::raw_fd_ostream dest(filename, error_code, llvm::sys::fs::OF_None);
-    
-    if (error_code) {
-        reportCodegenError(SourceLocation(), "Could not open file: " + error_code.message());
-        delete target_machine;
-        return false;
-    }
-    
-    // Create pass manager and add target-specific passes
-    llvm::legacy::PassManager pass;
-    auto file_type = llvm::CodeGenFileType::ObjectFile;
-    
-    if (target_machine->addPassesToEmitFile(pass, dest, nullptr, file_type)) {
-        reportCodegenError(SourceLocation(), "TargetMachine can't emit a file of this type");
-        delete target_machine;
-        return false;
-    }
-    
-    // Run the passes
-    pass.run(*module);
-    dest.flush();
-    
-    delete target_machine;
-    return true;
-}
-
-// Cross-platform linking implementation
-bool LLVMCodeGenerator::linkObjectToExecutable(const std::string& obj_filename, const std::string& exe_filename) {
-    logVerbose("Starting cross-platform linking process");
-    logVerbose("Object file: " + obj_filename);
-    logVerbose("Target executable: " + exe_filename);
-    
-    // Get platform-specific linker commands
-    std::vector<std::string> linker_commands = getLinkerCommands(obj_filename, exe_filename);
-    
-    if (linker_commands.empty()) {
-        reportCodegenError(SourceLocation(), "No linker commands available for current platform");
-        return false;
-    }
-    
-    // Try each linker command in order of preference
-    for (const auto& command : linker_commands) {
-        logVerbose("Trying linker command: " + command);
-        
-        // Check if the base command is available before trying
-        std::string linker = command.substr(0, command.find(' '));
-        if (!isCommandAvailable(linker)) {
-            logVerbose("Linker not available: " + linker);
-            continue;
-        }
-        
-        logVerbose("Executing: " + command);
-        int result = std::system(command.c_str());
-        
-        if (result == 0) {
-            logVerbose("Linking successful with: " + linker);
-            
-            // Verify the executable was created
-            if (std::filesystem::exists(exe_filename)) {
-                logVerbose("Executable verified: " + exe_filename);
-                
-                // Clean up object file on success
-                try {
-                    std::filesystem::remove(obj_filename);
-                    logVerbose("Cleaned up object file: " + obj_filename);
-                } catch (const std::exception& e) {
-                    logVerbose("Warning: Could not clean up object file: " + std::string(e.what()));
-                }
-                
-                return true;
-            } else {
-                logVerbose("Warning: Linker reported success but executable not found");
-            }
-        } else {
-            logVerbose("Linking failed with exit code: " + std::to_string(result));
-        }
-    }
-    
-    // All linkers failed - clean up object file and report comprehensive error
-    try {
-        std::filesystem::remove(obj_filename);
-        logVerbose("Cleaned up object file after linking failure");
-    } catch (const std::exception& e) {
-        logVerbose("Could not clean up object file: " + std::string(e.what()));
-    }
-    
-    std::string os = detectOperatingSystem();
-    std::ostringstream error_msg;
-    error_msg << "Failed to create executable: No compatible linker found.\n";
-    error_msg << "Detected OS: " << os << "\n";
-    error_msg << "Please install one of the following linkers:\n";
-    
-    if (os == "Windows") {
-        error_msg << "  - Clang (clang-cl or clang) - Recommended\n";
-        error_msg << "  - Microsoft Visual Studio (link.exe)\n";
-        error_msg << "  - GCC (MinGW/MSYS2)\n";
-    } else if (os == "Linux") {
-        error_msg << "  - Clang (clang) - Recommended\n";
-        error_msg << "  - GCC (gcc)\n";
-        error_msg << "  - Install via: sudo apt install clang (Ubuntu/Debian)\n";
-        error_msg << "  - Install via: sudo yum install clang (RHEL/CentOS)\n";
-    } else if (os == "macOS") {
-        error_msg << "  - Clang (clang) - Usually pre-installed with Xcode\n";
-        error_msg << "  - GCC (gcc) - Install via Homebrew: brew install gcc\n";
-        error_msg << "  - Install Xcode Command Line Tools: xcode-select --install\n";
-    } else {
-        error_msg << "  - Clang (clang)\n";
-        error_msg << "  - GCC (gcc)\n";
-    }
-    
-    error_msg << "\nAlternatively, use --llvm flag to generate LLVM IR instead.";
-    
-    reportCodegenError(SourceLocation(), error_msg.str());
-    return false;
-}
-
-std::string LLVMCodeGenerator::detectOperatingSystem() {
-#ifdef _WIN32
-    return "Windows";
-#elif defined(__APPLE__)
-    return "macOS";
-#elif defined(__linux__)
-    return "Linux";
-#elif defined(__unix__) || defined(__unix)
-    return "Unix";
-#else
-    return "Unknown";
-#endif
-}
-
-std::vector<std::string> LLVMCodeGenerator::getLinkerCommands(const std::string& obj_filename, const std::string& exe_filename) {
-    std::vector<std::string> commands;
-    std::string os = detectOperatingSystem();
-    
-    // Escape filenames for shell safety
-    std::string safe_obj = "\"" + obj_filename + "\"";
-    std::string safe_exe = "\"" + exe_filename + "\"";
-    
-    // Output redirection for quiet operation
-    std::string quiet_redirect;
-    if (os == "Windows") {
-        quiet_redirect = " >nul 2>nul";
-    } else {
-        quiet_redirect = " >/dev/null 2>&1";
-    }
-    
-    if (os == "Windows") {
-        // Windows linker options in order of preference
-        // 1. Clang (most compatible with LLVM) - link with MSVCRT for printf, math functions
-        commands.push_back("clang -o " + safe_exe + " " + safe_obj + " -lmsvcrt" + quiet_redirect);
-        
-        // 2. GCC (MinGW) - link with standard C library and math library
-        commands.push_back("gcc -o " + safe_exe + " " + safe_obj + " -lm -lmsvcrt" + quiet_redirect);
-        commands.push_back("x86_64-w64-mingw32-gcc -o " + safe_exe + " " + safe_obj + " -lm" + quiet_redirect);
-        
-        // 3. Clang-cl (MSVC-compatible interface)
-        commands.push_back("clang-cl /Fe:" + safe_exe + " " + safe_obj + " msvcrt.lib legacy_stdio_definitions.lib" + quiet_redirect);
-        
-        // 4. Microsoft linker (if available)
-        commands.push_back("link.exe /OUT:" + safe_exe + " " + safe_obj + " /SUBSYSTEM:CONSOLE msvcrt.lib legacy_stdio_definitions.lib" + quiet_redirect);
-        
-    } else if (os == "Linux") {
-        // Linux linker options
-        // 1. Clang (preferred for LLVM compatibility)
-        commands.push_back("clang -o " + safe_exe + " " + safe_obj + " -lm -lpthread" + quiet_redirect);
-        
-        // 2. GCC
-        commands.push_back("gcc -o " + safe_exe + " " + safe_obj + " -lm -lpthread" + quiet_redirect);
-        
-        // 3. Alternative clang names
-        commands.push_back("clang-15 -o " + safe_exe + " " + safe_obj + " -lm -lpthread" + quiet_redirect);
-        commands.push_back("clang-14 -o " + safe_exe + " " + safe_obj + " -lm -lpthread" + quiet_redirect);
-        
-    } else if (os == "macOS") {
-        // macOS linker options
-        // 1. Clang (standard on macOS)
-        commands.push_back("clang -o " + safe_exe + " " + safe_obj + quiet_redirect);
-        
-        // 2. GCC (if installed via Homebrew)
-        commands.push_back("gcc -o " + safe_exe + " " + safe_obj + quiet_redirect);
-        commands.push_back("gcc-13 -o " + safe_exe + " " + safe_obj + quiet_redirect);
-        commands.push_back("gcc-12 -o " + safe_exe + " " + safe_obj + quiet_redirect);
-        
-    } else {
-        // Generic Unix-like system
-        commands.push_back("clang -o " + safe_exe + " " + safe_obj + " -lm" + quiet_redirect);
-        commands.push_back("gcc -o " + safe_exe + " " + safe_obj + " -lm" + quiet_redirect);
-    }
-    
-    return commands;
-}
-
-bool LLVMCodeGenerator::isCommandAvailable(const std::string& command) {
-    // Test if a command is available by trying to run it with --version or similar
-    std::string test_command;
-    
-#ifdef _WIN32
-    // On Windows, redirect stderr to null and check exit code
-    test_command = command + " --version >nul 2>nul";
-#else
-    // On Unix-like systems, redirect both stdout and stderr to /dev/null
-    test_command = "command -v " + command + " >/dev/null 2>&1";
-#endif
-    
-    int result = std::system(test_command.c_str());
-    return result == 0;
-}
-
-void LLVMCodeGenerator::logVerbose(const std::string& message) {
-    // Only log verbose messages if verbose mode is enabled
-    // For now, disable verbose output by default
-    if (verbose)
-        std::cout << "[Pangea Linker] " << message << std::endl;
 }
 
 bool LLVMCodeGenerator::isTypeIdentifier(const std::string& name) {
@@ -1747,7 +1604,7 @@ llvm::Type* LLVMCodeGenerator::getCommonNumericType(llvm::Type* left, llvm::Type
     return (left_rank >= right_rank) ? left : right;
 }
 
-std::pair<llvm::Value*, llvm::Value*> LLVMCodeGenerator::promoteToCommonType(llvm::Value* left, llvm::Value* right, const SourceLocation& location) {
+std::pair<llvm::Value*, llvm::Value*> LLVMCodeGenerator::promoteToCommonType(llvm::Value* left, llvm::Value* right) {
     llvm::Type* left_type = left->getType();
     llvm::Type* right_type = right->getType();
     

@@ -1,0 +1,13 @@
+import "wintypes.pang"
+
+// Process / memory
+export foreign fn GetLastError() -> DWORD
+export foreign fn SetLastError(dwErrCode: DWORD) -> void
+export foreign fn ExitProcess(uExitCode: UINT) -> void
+export foreign fn GetCurrentProcess() -> HANDLE
+export foreign fn GetCurrentProcessId() -> DWORD
+
+// Memory allocation
+export foreign fn VirtualAlloc(lpAddress: LPVOID, dwSize: SIZE_T, flAllocationType: DWORD, flProtect: DWORD) -> LPVOID
+export foreign fn VirtualFree(lpAddress: LPVOID, dwSize: SIZE_T, dwFreeType: DWORD) -> BOOL
+export foreign fn VirtualProtect(lpAddress: LPVOID, dwSize: SIZE_T, flNewProtect: DWORD, lpflOldProtect: cptr<DWORD>) -> BOOL

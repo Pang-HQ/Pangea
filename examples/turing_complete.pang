@@ -1,5 +1,5 @@
-import "cstdlib/stdio.pang"
-import "windows/api/winerror.pang"
+import "cstdlib/stdio"
+import "windows/api/winerror"
 
 fn run_fib(n: i32) -> i32 {
     if n <= 1 {
@@ -28,9 +28,9 @@ fn main() -> i32 {
         n++
     }
 
-    let i: const i32 = ERROR_SUCCESS
-    let j: const i32 = ERROR_INVALID_PARAMETER
-    let k: const i32 = ERROR_OUTOFMEMORY
+    let i: i32 = ERROR_SUCCESS
+    let j: i32 = ERROR_INVALID_PARAMETER
+    let k: i32 = ERROR_OUTOFMEMORY
 
     printf("error codes: %d, %d, %d\n", i, j, k)
 

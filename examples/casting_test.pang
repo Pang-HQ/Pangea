@@ -1,0 +1,21 @@
+// Test casting functionality
+fn main() -> i32 {
+    // Test basic numeric casting
+    let x: i32 = 42;
+    let y: f64 = cast<f64>(x);
+    let z: i8 = cast<i8>(x);
+    
+    // Test 'as' operator
+    let a: f32 = 3.14f32;
+    let b: i32 = a as i32;
+    
+    // Test try_cast (safe casting)
+    let c: i64 = 1000i64;
+    let d: i16 = try_cast<i16>(c);
+    
+    // Test casting between different numeric types
+    let e: u8 = 255u8;
+    let f: i16 = cast<i16>(e);
+    
+    return 0;
+}

@@ -1,0 +1,143 @@
+// windows/api/kernel32.pang
+// Low-level Kernel32 FFI bindings (UTF-16 / wide-char only).
+// Only exports foreign function declarations. No ANSI / deprecated APIs.
+
+import "wintypes.pang"
+
+//////////////////////////////////////////////////////////////////
+// Common constants (kept local to this file)
+//////////////////////////////////////////////////////////////////
+
+let INVALID_HANDLE_VALUE: const HANDLE = cast<const HANDLE>(cast<usize>(-1))
+let NULL_HANDLE: const HANDLE = null
+
+let FORMAT_MESSAGE_ALLOCATE_BUFFER: const DWORD = cast<const DWORD>(0x00000100)
+let FORMAT_MESSAGE_FROM_SYSTEM: const DWORD     = cast<const DWORD>(0x00001000)
+let FORMAT_MESSAGE_IGNORE_INSERTS: const DWORD  = cast<const DWORD>(0x00000200)
+
+//////////////////////////////////////////////////////////////////
+// Structs (foreign/opaque mirrors)
+// Only declare what Kernel32 APIs need (kept simple)
+//////////////////////////////////////////////////////////////////
+
+foreign struct FILETIME {
+    dwLowDateTime: DWORD
+    dwHighDateTime: DWORD
+}
+
+foreign struct SYSTEMTIME {
+    wYear: WORD
+    wMonth: WORD
+    wDayOfWeek: WORD
+    wDay: WORD
+    wHour: WORD
+    wMinute: WORD
+    wSecond: WORD
+    wMilliseconds: WORD
+}
+
+foreign struct OVERLAPPED {
+    Internal: usize
+    InternalHigh: usize
+    Offset: DWORD
+    OffsetHigh: DWORD
+    hEvent: HANDLE
+}
+
+foreign struct SECURITY_ATTRIBUTES {
+    nLength: DWORD
+    lpSecurityDescriptor: LPVOID
+    bInheritHandle: BOOL
+}
+
+//////////////////////////////////////////////////////////////////
+// Exported foreign function bindings (Kernel32, UTF-16 variants only)
+//////////////////////////////////////////////////////////////////
+
+// Error handling
+export foreign fn GetLastError() -> DWORD
+export foreign fn SetLastError(dwErrCode: DWORD) -> void
+
+// Process / exit
+export foreign fn ExitProcess(uExitCode: u32) -> void
+export foreign fn GetCurrentProcess() -> HANDLE
+export foreign fn GetCurrentProcessId() -> DWORD
+
+// Module / symbol resolution
+export foreign fn GetModuleHandleW(lpModuleName: LPCWSTR) -> HMODULE
+export foreign fn GetModuleFileNameW(hModule: HMODULE, lpFilename: LPWSTR, nSize: DWORD) -> DWORD
+export foreign fn GetProcAddress(hModule: HMODULE, lpProcName: cptr<u8>) -> cptr<void> // ANSI name (byte*), typical Win API
+
+// Synchronization / Sleep
+export foreign fn Sleep(dwMilliseconds: DWORD) -> void
+export foreign fn SleepEx(dwMilliseconds: DWORD, bAlertable: BOOL) -> DWORD
+
+// File I/O (wide-char CreateFile)
+export foreign fn CreateFileW(
+    lpFileName: LPCWSTR,
+    dwDesiredAccess: DWORD,
+    dwShareMode: DWORD,
+    lpSecurityAttributes: cptr<SECURITY_ATTRIBUTES>,
+    dwCreationDisposition: DWORD,
+    dwFlagsAndAttributes: DWORD,
+    hTemplateFile: HANDLE
+) -> HANDLE
+
+export foreign fn ReadFile(
+    hFile: HANDLE,
+    lpBuffer: LPVOID,
+    nNumberOfBytesToRead: DWORD,
+    lpNumberOfBytesRead: cptr<DWORD>,
+    lpOverlapped: cptr<OVERLAPPED>
+) -> BOOL
+
+export foreign fn WriteFile(
+    hFile: HANDLE,
+    lpBuffer: LPCVOID,
+    nNumberOfBytesToWrite: DWORD,
+    lpNumberOfBytesWritten: cptr<DWORD>,
+    lpOverlapped: cptr<OVERLAPPED>
+) -> BOOL
+
+export foreign fn CloseHandle(hObject: HANDLE) -> BOOL
+export foreign fn FlushFileBuffers(hFile: HANDLE) -> BOOL
+export foreign fn SetFilePointerEx(hFile: HANDLE, liDistanceToMove: LONGLONG, lpNewFilePointer: cptr<LONGLONG>, dwMoveMethod: DWORD) -> BOOL
+export foreign fn GetFileSizeEx(hFile: HANDLE, lpFileSize: cptr<ULONGLONG>) -> BOOL
+
+// Memory management / virtual memory
+export foreign fn VirtualAlloc(lpAddress: LPVOID, dwSize: SIZE_T, flAllocationType: DWORD, flProtect: DWORD) -> LPVOID
+export foreign fn VirtualFree(lpAddress: LPVOID, dwSize: SIZE_T, dwFreeType: DWORD) -> BOOL
+export foreign fn VirtualProtect(lpAddress: LPVOID, dwSize: SIZE_T, flNewProtect: DWORD, lpflOldProtect: cptr<DWORD>) -> BOOL
+
+// Heap (process default heap helpers)
+export foreign fn GetProcessHeap() -> HANDLE
+export foreign fn HeapAlloc(hHeap: HANDLE, dwFlags: DWORD, dwBytes: SIZE_T) -> LPVOID
+export foreign fn HeapFree(hHeap: HANDLE, dwFlags: DWORD, lpMem: LPVOID) -> BOOL
+
+// Console / standard handles
+export foreign fn GetStdHandle(nStdHandle: DWORD) -> HANDLE
+
+// Time / system time
+export foreign fn GetSystemTime(lpSystemTime: cptr<SYSTEMTIME>) -> void
+export foreign fn GetSystemTimeAsFileTime(lpFileTime: cptr<FILETIME>) -> void
+export foreign fn SystemTimeToFileTime(lpSystemTime: cptr<SYSTEMTIME>, lpFileTime: cptr<FILETIME>) -> BOOL
+export foreign fn FileTimeToSystemTime(lpFileTime: cptr<FILETIME>, lpSystemTime: cptr<SYSTEMTIME>) -> BOOL
+
+// Formatting helper (wide)
+export foreign fn FormatMessageW(
+    dwFlags: DWORD,
+    lpSource: LPCVOID,
+    dwMessageId: DWORD,
+    dwLanguageId: DWORD,
+    lpBuffer: LPWSTR,
+    nSize: DWORD,
+    Arguments: cptr<LPVOID>
+) -> DWORD
+
+// Misc utilities
+export foreign fn QueryPerformanceCounter(lpPerformanceCount: cptr<SSIZE_T>) -> BOOL
+export foreign fn QueryPerformanceFrequency(lpFrequency: cptr<SSIZE_T>) -> BOOL
+
+//////////////////////////////////////////////////////////////////
+// End of kernel32 bindings
+//////////////////////////////////////////////////////////////////

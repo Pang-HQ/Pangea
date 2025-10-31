@@ -9,12 +9,30 @@
 #include "lexer/lexer.h"
 #include "parser/parser.h"
 #include "ast/ast_visitor.h"
+#include "ast/ast_printer.h"
 #include "semantic/type_checker.h"
 #include "utils/error_reporter.h"
 #include "codegen/llvm_codegen.h"
+#include "codegen/compile.h"
 
 
 using namespace pangea;
+
+std::string readFile(const std::string& filename) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Error: Could not open file '" << filename << "'" << std::endl;
+        return "";
+    }
+    
+    std::string content;
+    std::string line;
+    while (std::getline(file, line)) {
+        content += line + "\n";
+    }
+    
+    return content;
+}
 
 // Module manager for handling separate compilation
 class ModuleManager {
@@ -28,23 +46,7 @@ public:
     ModuleManager(ErrorReporter* reporter, bool verbose_mode) 
         : error_reporter(reporter), verbose(verbose_mode) {}
 
-    std::string readFile(const std::string& filename) {
-        std::ifstream file(filename);
-        if (!file.is_open()) {
-            if (verbose) {
-                std::cerr << "Warning: Could not open file '" << filename << "'" << std::endl;
-            }
-            return "";
-        }
-        
-        std::string content;
-        std::string line;
-        while (std::getline(file, line)) {
-            content += line + "\n";
-        }
-        
-        return content;
-    }
+
 
     std::string resolveModulePath(const std::string& module_path) {
         // Try different extensions and paths
@@ -221,22 +223,6 @@ public:
     }
 };
 
-std::string readFile(const std::string& filename) {
-    std::ifstream file(filename);
-    if (!file.is_open()) {
-        std::cerr << "Error: Could not open file '" << filename << "'" << std::endl;
-        return "";
-    }
-    
-    std::string content;
-    std::string line;
-    while (std::getline(file, line)) {
-        content += line + "\n";
-    }
-    
-    return content;
-}
-
 void printUsage(const char* program_name) {
     std::cout << "Usage: " << program_name << " [options] <input_file>" << std::endl;
     std::cout << "Options:" << std::endl;
@@ -356,12 +342,8 @@ int main(int argc, char* argv[]) {
     }
     
     if (print_ast) {
-        std::cout << "Abstract Syntax Tree:" << std::endl;
-        std::cout << "Main module: " << program->main_module->module_name << std::endl;
-        std::cout << "Imported modules: " << program->modules.size() << std::endl;
-        for (const auto& module : program->modules) {
-            std::cout << "  - " << module->module_name << " (" << module->file_path << ")" << std::endl;
-        }
+        ASTPrinter printer;
+        printer.printProgram(*program);
         return 0;
     }
     
@@ -410,11 +392,12 @@ int main(int argc, char* argv[]) {
         codegen.emitToFile(output_file);
         std::cout << "LLVM IR generated successfully: " << output_file << std::endl;
     } else {
-        // Compile to executable
-        if (codegen.compileToExecutable(output_file)) {
+        // Compile to executable using the new Compiler class
+        Compiler compiler(&codegen, verbose);
+        if (compiler.compileToExecutable(output_file)) {
             std::cout << "Compiled successfully: " << output_file << std::endl;
         } else {
-            return 1; // Error messages already printed by codegen
+            return 1; // Error messages already printed by compiler
         }
     }
     

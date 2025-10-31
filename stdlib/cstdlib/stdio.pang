@@ -66,14 +66,14 @@ export foreign fn clearerr(stream: FILE) -> void
 export foreign fn perror(str: cptr<u8>) -> void
 
 // Standard streams (extern declarations)
-export foreign const stdin: FILE
-export foreign const stdout: FILE
-export foreign const stderr: FILE
+export foreign let stdin: const FILE
+export foreign let stdout: const FILE
+export foreign let stderr: const FILE
 
 // File positioning constants
-export const SEEK_SET: i32 = 0
-export const SEEK_CUR: i32 = 1
-export const SEEK_END: i32 = 2
+export let SEEK_SET: const i32 = 0
+export let SEEK_CUR: const i32 = 1
+export let SEEK_END: const i32 = 2
 
 // EOF constant
-export const EOF: i32 = -1
+export let EOF: const i32 = -1

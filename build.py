@@ -95,8 +95,10 @@ def main():
         "../src/lexer/token.cpp",
         "../src/parser/parser.cpp",
         "../src/ast/ast_nodes.cpp",
+        "../src/ast/ast_printer.cpp",
         "../src/semantic/type_checker.cpp",
         "../src/codegen/llvm_codegen.cpp",
+        "../src/codegen/compile.cpp",
         "../src/utils/source_location.cpp",
         "../src/utils/unicode/unicode_escape.cpp",
         "../src/utils/error_reporter.cpp"

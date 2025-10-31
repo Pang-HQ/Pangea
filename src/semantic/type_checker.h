@@ -20,9 +20,12 @@ public:
         FUNCTION,
         VOID_TYPE,
         ERROR_TYPE
-    };
-
+    } kind;
+    std::string name;
     bool is_const;
+    std::unique_ptr<SemanticType> element_type;
+    std::vector<std::unique_ptr<SemanticType>> parameter_types;
+    std::unique_ptr<SemanticType> return_type;
     
     // Single constructor for kind and optional name
     explicit SemanticType(Kind kind, const std::string& name = "", bool is_const = false)
@@ -32,6 +35,7 @@ public:
     SemanticType(const SemanticType& other)
         : kind(other.kind),
         name(other.name),
+        is_const(other.is_const),
         element_type(other.element_type ? std::make_unique<SemanticType>(*other.element_type) : nullptr),
         return_type(other.return_type ? std::make_unique<SemanticType>(*other.return_type) : nullptr)
     {
@@ -50,11 +54,6 @@ public:
 
     ~SemanticType() = default;
     
-    Kind kind;
-    std::string name;
-    std::unique_ptr<SemanticType> element_type;
-    std::vector<std::unique_ptr<SemanticType>> parameter_types;
-    std::unique_ptr<SemanticType> return_type;
     
     bool isCompatibleWith(const SemanticType& other) const;
     bool isNumberType() const;
