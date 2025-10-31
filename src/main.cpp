@@ -342,7 +342,8 @@ int main(int argc, char* argv[]) {
     }
     
     if (print_ast) {
-        ASTPrinter printer;
+        std::ofstream out(output_file + ".ast", std::ios::out | std::ios::trunc);
+        ASTPrinter printer(out);
         printer.printProgram(*program);
         return 0;
     }
@@ -389,7 +390,7 @@ int main(int argc, char* argv[]) {
     // Choose output format based on flags
     if (output_llvm) {
         // Output LLVM IR
-        codegen.emitToFile(output_file);
+        codegen.emitToFile(output_file + ".ll");
         std::cout << "LLVM IR generated successfully: " << output_file << std::endl;
     } else {
         // Compile to executable using the new Compiler class
