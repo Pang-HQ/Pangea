@@ -38,7 +38,6 @@ Lexer::Lexer(const SourceBuffer &buf,
     }
 }
 
-// tokenise() alternates between trivia and one real token.
 void Lexer::tokenise() {
     assert(!done_ && "Lexer::tokenise() called more than once");
     done_ = true;
