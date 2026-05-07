@@ -34,7 +34,6 @@ public:
     std::string render_all(const Diagnostics &diagnostics) const;
 
 private:
-    // Upfront reserve for a typical rendered diagnostic.
     static constexpr size_t DEFAULT_RENDER_RESERVE = 256;
 
     const SourceBufferRegistry &registry_;
