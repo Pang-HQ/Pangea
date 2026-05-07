@@ -57,6 +57,8 @@ public:
     Lexer(Lexer &&) = delete;
     Lexer &operator=(Lexer &&) = delete;
 
+    // Tokenise the buffer into the caller-owned LexerOutput.
+    // Single-shot: calling more than once aborts.
     void tokenise();
 
 private:
