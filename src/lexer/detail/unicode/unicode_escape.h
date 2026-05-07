@@ -17,14 +17,14 @@
 
 namespace pangea {
 
-enum class StringEscapeError : uint8_t {
-    TrailingBackslash,
-    XRequiresHex,
-    URequires4Hex,
-    URequires8Hex,
-    USurrogate,
-    UOverflow,
-    UnknownEscape,
+enum class StringEscapeError : std::uint8_t {
+    TRAILING_BACKSLASH,
+    X_REQUIRES_HEX,
+    U_REQUIRES_4_HEX,
+    U_REQUIRES_8_HEX,
+    U_SURROGATE,
+    U_OVERFLOW,
+    UNKNOWN_ESCAPE,
 };
 
 // Human-readable message for the given error.

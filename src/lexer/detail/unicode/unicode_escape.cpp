@@ -1,14 +1,15 @@
 #include "unicode_escape.h"
 
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 
 namespace pangea {
 
-static constexpr int8_t hex_value(char c) noexcept {
-    if (c >= '0' && c <= '9') return static_cast<int8_t>(c - '0');
-    if (c >= 'a' && c <= 'f') return static_cast<int8_t>(10 + (c - 'a'));
-    if (c >= 'A' && c <= 'F') return static_cast<int8_t>(10 + (c - 'A'));
+static constexpr std::int8_t hex_value(char c) noexcept {
+    if (c >= '0' && c <= '9') return static_cast<std::int8_t>(c - '0');
+    if (c >= 'a' && c <= 'f') return static_cast<std::int8_t>(10 + (c - 'a'));
+    if (c >= 'A' && c <= 'F') return static_cast<std::int8_t>(10 + (c - 'A'));
     return -1;
 }
 
@@ -16,7 +17,7 @@ static constexpr bool is_hex(char c) noexcept {
     return hex_value(c) >= 0;
 }
 
-static void encode_utf8(uint32_t cp, std::string &out) {
+static void encode_utf8(std::uint32_t cp, std::string &out) {
     assert(cp <= 0x10FFFF);
     assert(cp < 0xD800 || cp > 0xDFFF);
 
@@ -42,13 +43,13 @@ static void encode_utf8(uint32_t cp, std::string &out) {
 }
 
 static bool read_fixed_hex(std::string_view raw, size_t &pos,
-                           size_t digits, uint32_t &out) {
+                           size_t digits, std::uint32_t &out) {
     if (raw.size() - pos < digits) return false;
-    uint32_t cp = 0;
+    std::uint32_t cp = 0;
     for (size_t i = 0; i < digits; ++i) {
-        const int8_t v = hex_value(raw[pos + i]);
+        const std::int8_t v = hex_value(raw[pos + i]);
         if (v < 0) return false;
-        cp = (cp << 4) | static_cast<uint32_t>(v);
+        cp = (cp << 4) | static_cast<std::uint32_t>(v);
     }
     pos += digits;
     out = cp;
@@ -57,19 +58,19 @@ static bool read_fixed_hex(std::string_view raw, size_t &pos,
 
 std::string_view message_for(StringEscapeError err) noexcept {
     switch (err) {
-        case StringEscapeError::TrailingBackslash:
+        case StringEscapeError::TRAILING_BACKSLASH:
             return "trailing backslash in string literal";
-        case StringEscapeError::XRequiresHex:
+        case StringEscapeError::X_REQUIRES_HEX:
             return "\\x requires at least one hex digit";
-        case StringEscapeError::URequires4Hex:
+        case StringEscapeError::U_REQUIRES_4_HEX:
             return "\\u requires exactly 4 hex digits";
-        case StringEscapeError::URequires8Hex:
+        case StringEscapeError::U_REQUIRES_8_HEX:
             return "\\U requires exactly 8 hex digits";
-        case StringEscapeError::USurrogate:
+        case StringEscapeError::U_SURROGATE:
             return "surrogate code point is not a valid Unicode scalar";
-        case StringEscapeError::UOverflow:
+        case StringEscapeError::U_OVERFLOW:
             return "\\U code point exceeds U+10FFFF";
-        case StringEscapeError::UnknownEscape:
+        case StringEscapeError::UNKNOWN_ESCAPE:
             return "unknown escape sequence";
     }
     return "unknown escape error";
@@ -84,7 +85,7 @@ unescape_string(std::string_view raw, std::string &out) {
     out.clear();
     out.reserve(raw.size());
 
-    size_t i = 0;
+    std::size_t i = 0;
     while (i < raw.size()) {
         const char c = raw[i];
 
@@ -97,7 +98,7 @@ unescape_string(std::string_view raw, std::string &out) {
         // A trailing backslash is always invalid.
         ++i;
         if (i >= raw.size()) {
-            return StringEscapeError::TrailingBackslash;
+            return StringEscapeError::TRAILING_BACKSLASH;
         }
 
         const char e = raw[i];
@@ -120,12 +121,12 @@ unescape_string(std::string_view raw, std::string &out) {
             case 'x': {
                 // \x reads one or two hex digits and emits one byte.
                 if (i >= raw.size() || !is_hex(raw[i])) {
-                    return StringEscapeError::XRequiresHex;
+                    return StringEscapeError::X_REQUIRES_HEX;
                 }
-                uint32_t value = static_cast<uint32_t>(hex_value(raw[i]));
+                std::uint32_t value = static_cast<std::uint32_t>(hex_value(raw[i]));
                 ++i;
                 if (i < raw.size() && is_hex(raw[i])) {
-                    value = (value << 4) | static_cast<uint32_t>(hex_value(raw[i]));
+                    value = (value << 4) | static_cast<std::uint32_t>(hex_value(raw[i]));
                     ++i;
                 }
                 out.push_back(static_cast<char>(value & 0xFF));
@@ -134,12 +135,12 @@ unescape_string(std::string_view raw, std::string &out) {
 
             case 'u': {
                 // \u reads one BMP scalar and re-encodes it as UTF-8.
-                uint32_t cp = 0;
+                std::uint32_t cp = 0;
                 if (!read_fixed_hex(raw, i, 4, cp)) {
-                    return StringEscapeError::URequires4Hex;
+                    return StringEscapeError::U_REQUIRES_4_HEX;
                 }
                 if (cp >= 0xD800 && cp <= 0xDFFF) {
-                    return StringEscapeError::USurrogate;
+                    return StringEscapeError::U_SURROGATE;
                 }
                 encode_utf8(cp, out);
                 break;
@@ -147,22 +148,22 @@ unescape_string(std::string_view raw, std::string &out) {
 
             case 'U': {
                 // \U reads one full Unicode scalar and re-encodes it as UTF-8.
-                uint32_t cp = 0;
+                std::uint32_t cp = 0;
                 if (!read_fixed_hex(raw, i, 8, cp)) {
-                    return StringEscapeError::URequires8Hex;
+                    return StringEscapeError::U_REQUIRES_8_HEX;
                 }
                 if (cp > 0x10FFFF) {
-                    return StringEscapeError::UOverflow;
+                    return StringEscapeError::U_OVERFLOW;
                 }
                 if (cp >= 0xD800 && cp <= 0xDFFF) {
-                    return StringEscapeError::USurrogate;
+                    return StringEscapeError::U_SURROGATE;
                 }
                 encode_utf8(cp, out);
                 break;
             }
 
             default:
-                return StringEscapeError::UnknownEscape;
+                return StringEscapeError::UNKNOWN_ESCAPE;
         }
     }
 
