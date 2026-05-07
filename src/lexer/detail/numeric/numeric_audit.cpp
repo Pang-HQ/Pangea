@@ -1,5 +1,4 @@
 #include "numeric_segments.h"
-
 #include "numeric_chars.h"
 
 #include <cassert>
@@ -152,7 +151,7 @@ void audit_success(const NumericSegments &segs, const NumericValue &value) {
     assert(!segs.suffix.has_value() || segs.suffix->valid);
 
     if (segs.kind() == NumericKind::INTEGER) {
-        assert(std::holds_alternative<uint64_t>(value));
+        assert(std::holds_alternative<std::uint64_t>(value));
         return;
     }
 

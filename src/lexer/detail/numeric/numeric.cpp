@@ -268,7 +268,7 @@ std::optional<SuffixInfo> scan_suffix(NumericCursor &cur,
     };
 }
 
-std::expected<uint64_t, NumericParseError>
+std::expected<std::uint64_t, NumericParseError>
 parse_integer_value(const NumericSegments &segs) noexcept {
     std::uint64_t value = 0;
     const auto base = std::to_underlying(segs.base());

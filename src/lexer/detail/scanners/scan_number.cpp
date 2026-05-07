@@ -48,7 +48,7 @@ void scan_number(SourceCursor &cur, Emitter &emit, const SourceBuffer &buf) {
         return;
     }
 
-    emit.emit(TokenType::LITERAL_INTEGER, range, std::get<uint64_t>(value));
+    emit.emit(TokenType::LITERAL_INTEGER, range, std::get<std::uint64_t>(value));
 }
 
 } // namespace pangea::detail

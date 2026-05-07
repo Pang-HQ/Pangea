@@ -6,6 +6,7 @@
  the final consumed length back to SourceRange.
 */
 
+#include "../../token.h"
 #include "numeric.h"
 
 #include <cstddef>
