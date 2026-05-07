@@ -62,12 +62,18 @@ void Lexer::tokenise() {
                 continue;
             }
 
-            if (c == '/' && cursor_.peek(1) == '/') {
+            if (c != '/') {
+                break;
+            }
+
+            const char n = cursor_.peek(1);
+
+            if (n == '/') {
                 scan_line_comment();
                 continue;
             }
 
-            if (c == '/' && cursor_.peek(1) == '*') {
+            if (n == '*') {
                 scan_block_comment();
                 continue;
             }
