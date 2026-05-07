@@ -16,9 +16,8 @@ generation) is yet to come.
 
 ## Building
 
-The build system is [Meson](https://mesonbuild.com/) with
-[Ninja](https://ninja-build.org/) as the backend. Both are available from
-any major package manager.
+We use [Meson](https://mesonbuild.com/) with
+[Ninja](https://ninja-build.org/). You can find both on any major package manager.
 
 ```
 meson setup build
@@ -29,7 +28,7 @@ The compiler binary is written to `build/pangea`. The default build type
 is `debugoptimized`, which layers on AddressSanitizer, UBSan, libstdc++
 debug iterators, and `_FORTIFY_SOURCE`.
 
-For a release build (no sanitisers, full optimisations, asserts stripped):
+For a release build:
 
 ```
 meson setup build-release --buildtype=release -Db_lto=true -Db_ndebug=true
