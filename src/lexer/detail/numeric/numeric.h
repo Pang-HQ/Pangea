@@ -29,7 +29,7 @@ enum class NumericParseError {
     FLOAT_OVERFLOW,
 };
 
-using NumericValue = std::variant<uint64_t, double>;
+using NumericValue = std::variant<std::uint64_t, double>;
 
 struct NumericOutcome {
     /*
