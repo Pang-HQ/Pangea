@@ -55,10 +55,6 @@ SourceOffset SourceCursor::offset() const noexcept {
     return static_cast<SourceOffset>(diff);
 }
 
-bool SourceCursor::at_end() const noexcept {
-    return cursor_ >= end_;
-}
-
 void SourceCursor::consume_bom_if_present() noexcept {
     if (static_cast<std::size_t>(end_ - cursor_) < 3) {
         return;

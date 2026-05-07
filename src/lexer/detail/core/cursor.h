@@ -12,7 +12,6 @@
 #include "../../../source/source_location.h"
 
 #include <cstddef>
-#include <cstdint>
 
 namespace pangea::detail {
 
@@ -27,7 +26,9 @@ public:
 
     void advance() noexcept;
     [[nodiscard]] SourceOffset offset() const noexcept;
-    [[nodiscard]] bool at_end() const noexcept;
+    [[nodiscard]] bool at_end() const noexcept {
+        return cursor_ >= end_;
+    }
 
     // May read the current byte or look ahead as far as the sentinel.
     [[nodiscard]] char peek(size_t n = 0) const noexcept;
