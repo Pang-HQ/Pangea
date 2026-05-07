@@ -32,10 +32,16 @@ public:
     TokenSink(TokenSink &&) = delete;
     TokenSink &operator=(TokenSink &&) = delete;
 
-    // Append a real token and return its index.
+    /*
+     Append a real token and return its index. payload is the raw
+     uint32_t that lands in Token::payload; how it is interpreted
+     depends on type (see token.h). Caller is responsible for any
+     side-table push (e.g. integer_literals); the sink only writes
+     the index.
+    */
     TokenIndex emit(TokenType type,
                     SourceRange range,
-                    TokenPayload payload = TokenPayload{});
+                    std::uint32_t payload = 0);
 
     /*
      Emit SPECIAL_NEWLINE collecting the buffered blank-line run; the

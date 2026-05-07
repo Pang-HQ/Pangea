@@ -173,10 +173,13 @@ std::uint32_t newlines_of(const Token &tok) noexcept {
     if (tok.type != TokenType::SPECIAL_NEWLINE)
         return 0;
 
-    const std::uint64_t *count = std::get_if<std::uint64_t>(&tok.payload);
-    assert(count != nullptr);
+    return tok.payload;
+}
 
-    return static_cast<std::uint32_t>(*count);
+SymbolID symbol_of(const Token &tok) noexcept {
+    assert(tok.type == TokenType::LITERAL_STRING
+        || tok.type == TokenType::LITERAL_C_STRING);
+    return SymbolID{tok.payload};
 }
 
 } // namespace pangea

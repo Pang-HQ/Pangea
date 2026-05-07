@@ -1,16 +1,15 @@
 #include "token_sink.h"
 
 #include <cassert>
-#include <utility>
 
 namespace pangea::detail {
 
 TokenIndex TokenSink::emit(TokenType type,
                            SourceRange range,
-                           TokenPayload payload) {
+                           std::uint32_t payload) {
     const TokenIndex index = count_;
     [[maybe_unused]] const Token *t =
-        tokens_.emplace(type, range, std::move(payload));
+        tokens_.emplace(type, range, payload);
     assert(t != nullptr && "token arena exhausted");
     ++count_;
     return index;
@@ -20,7 +19,7 @@ void TokenSink::flush_pending_newline(SourceOffset offset) {
     if (pending_newlines_ == 0)
         return;
 
-    const std::uint64_t count = pending_newlines_;
+    const std::uint32_t count = pending_newlines_;
     pending_newlines_ = 0;
 
     /*

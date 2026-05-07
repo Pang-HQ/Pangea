@@ -4,11 +4,8 @@
 #include "token.h"
 #include "../source/string_pool.h"
 
-#include <cstdint>
 #include <cstdio>
 #include <string_view>
-#include <type_traits>
-#include <variant>
 
 namespace pangea {
 
@@ -19,22 +16,34 @@ void write_view(std::FILE *out, std::string_view s) {
 }
 
 void write_payload(std::FILE *out,
-                   const TokenPayload &payload,
+                   const Token &tok,
+                   const LexerOutput &lex,
                    const StringPool &strings) {
-    std::visit([&](const auto &v) {
-        using T = std::decay_t<decltype(v)>;
-
-        if constexpr (std::is_same_v<T, SymbolID>) {
+    switch (tok.type) {
+        case TokenType::LITERAL_STRING:
+        case TokenType::LITERAL_C_STRING:
             std::fputc('[', out);
-            write_view(out, strings.view(v));
+            write_view(out, strings.view(symbol_of(tok)));
             std::fputc(']', out);
-        } else if constexpr (std::is_same_v<T, std::uint64_t>) {
-            std::fprintf(out, "[%llu]", static_cast<unsigned long long>(v));
-        } else if constexpr (std::is_same_v<T, double>) {
-            std::fprintf(out, "[%g]", v);
-        }
-        // std::monostate prints nothing.
-    }, payload);
+            return;
+
+        case TokenType::LITERAL_INTEGER:
+            std::fprintf(out, "[%llu]",
+                static_cast<unsigned long long>(int_value_of(tok, lex)));
+            return;
+
+        case TokenType::LITERAL_FLOAT:
+            std::fprintf(out, "[%g]", float_value_of(tok, lex));
+            return;
+
+        case TokenType::SPECIAL_NEWLINE:
+            std::fprintf(out, "[%u]", newlines_of(tok));
+            return;
+
+        default:
+            // No payload to print.
+            return;
+    }
 }
 
 } // namespace
@@ -44,7 +53,7 @@ void dump_tokens(std::FILE *out,
                  const StringPool &strings) {
     for (const Token &tok : lex.tokens) {
         write_view(out, name_of(tok.type));
-        write_payload(out, tok.payload, strings);
+        write_payload(out, tok, lex, strings);
         std::fputc('\n', out);
     }
 }

@@ -18,7 +18,12 @@ Lexer::Lexer(const SourceBuffer &buf,
       cursor_(buf_),
       toks_(out_.tokens),
       trivia_(out_.trivia, out_.trivia_attachments),
-      emitter_(toks_, trivia_, buf_, reporter) {
+      emitter_(toks_,
+               trivia_,
+               out_.integer_literals,
+               out_.float_literals,
+               buf_,
+               reporter) {
     /*
      Cheap pre-reserve so the trivia and attachment pmr::vectors do
      not stack up several geometric-growth buffers in the arena
