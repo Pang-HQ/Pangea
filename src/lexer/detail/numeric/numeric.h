@@ -10,7 +10,6 @@
  lexer's cursor; the caller advances by `consumed` after the call.
 */
 
-#include "../../token.h"
 #include "../../../diagnostics/diagnostic_codes.h"
 
 #include <cstddef>
