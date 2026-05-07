@@ -1,0 +1,15 @@
+__pycache__
+.vscode/
+.cache/
+build/
+build-release/
+executables/
+hidden/
+
+# In-progress subsystems
+src/parser/
+src/ast/
+
+*.exe
+*.out
+.clangd

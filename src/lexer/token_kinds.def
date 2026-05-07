@@ -1,0 +1,402 @@
+/*
+ Single source of truth for lexer token kinds.
+
+ Hooks cascade from most-specific to most-generic. Each entry calls
+ its specialized hook; an unoverridden hook falls through to its
+ parent, all the way to DEFINE_TOKEN at the root.
+
+   DEFINE_INT_TYPE        \
+   DEFINE_FLOAT_TYPE       } -> DEFINE_TYPE -> DEFINE_TOKEN
+   DEFINE_POINTER_TYPE    /
+
+   DEFINE_ARITHMETIC_OPERATOR \
+   DEFINE_COMPARISON_OPERATOR  \
+   DEFINE_LOGICAL_OPERATOR      \
+   DEFINE_BITWISE_OPERATOR       } -> DEFINE_OPERATOR -> DEFINE_TOKEN
+   DEFINE_ASSIGNMENT_OPERATOR   /
+   DEFINE_INCREMENT_OPERATOR   /
+   DEFINE_ACCESS_OPERATOR     /
+
+   DEFINE_LITERAL     \
+   DEFINE_IDENTIFIER   |
+   DEFINE_KEYWORD      } -> DEFINE_TOKEN
+   DEFINE_PUNCT        |
+   DEFINE_SPECIAL     /
+
+ DEFINE_TOKEN(name, spelling, category) is the root hook and must be
+ defined by the caller before including this file.
+
+ Cascading lets callers pick the level of detail they want: override
+ DEFINE_TYPE to handle every type uniformly, DEFINE_INT_TYPE to pick
+ out just the integer subset, DEFINE_OPERATOR for all operators,
+ DEFINE_ARITHMETIC_OPERATOR for just `+ - * / % **`, and so on.
+ Overriding a hook disables the default fallthrough for that group;
+ other groups still reach DEFINE_TOKEN normally.
+
+ Cleanup responsibility splits along the same line: this file cleans
+ up any hook it had to supply a default for, callers clean up the
+ hooks they defined themselves.
+
+ Alignment in this file is intentional; the data-table reads more
+ easily with columns. Keep it.
+*/
+
+#ifndef DEFINE_TOKEN
+#error "DEFINE_TOKEN must be defined before including token_kinds.def"
+#endif
+
+// Generic type hook (parent of the specialized type hooks).
+#ifndef DEFINE_TYPE
+#define DEFINE_TYPE(name, spelling) DEFINE_TOKEN(name, spelling, TYPE)
+#define PANGEA_DEFINED_TYPE
+#endif
+
+#ifndef DEFINE_INT_TYPE
+#define DEFINE_INT_TYPE(name, spelling) DEFINE_TYPE(name, spelling)
+#define PANGEA_DEFINED_INT_TYPE
+#endif
+
+#ifndef DEFINE_FLOAT_TYPE
+#define DEFINE_FLOAT_TYPE(name, spelling) DEFINE_TYPE(name, spelling)
+#define PANGEA_DEFINED_FLOAT_TYPE
+#endif
+
+#ifndef DEFINE_POINTER_TYPE
+#define DEFINE_POINTER_TYPE(name, spelling) DEFINE_TYPE(name, spelling)
+#define PANGEA_DEFINED_POINTER_TYPE
+#endif
+
+// Generic operator hook (parent of the specialized operator hooks).
+#ifndef DEFINE_OPERATOR
+#define DEFINE_OPERATOR(name, spelling) DEFINE_TOKEN(name, spelling, OPERATOR)
+#define PANGEA_DEFINED_OPERATOR
+#endif
+
+#ifndef DEFINE_ARITHMETIC_OPERATOR
+#define DEFINE_ARITHMETIC_OPERATOR(name, spelling) \
+    DEFINE_OPERATOR(name, spelling)
+#define PANGEA_DEFINED_ARITHMETIC_OPERATOR
+#endif
+
+#ifndef DEFINE_COMPARISON_OPERATOR
+#define DEFINE_COMPARISON_OPERATOR(name, spelling) \
+    DEFINE_OPERATOR(name, spelling)
+#define PANGEA_DEFINED_COMPARISON_OPERATOR
+#endif
+
+#ifndef DEFINE_LOGICAL_OPERATOR
+#define DEFINE_LOGICAL_OPERATOR(name, spelling) \
+    DEFINE_OPERATOR(name, spelling)
+#define PANGEA_DEFINED_LOGICAL_OPERATOR
+#endif
+
+#ifndef DEFINE_BITWISE_OPERATOR
+#define DEFINE_BITWISE_OPERATOR(name, spelling) \
+    DEFINE_OPERATOR(name, spelling)
+#define PANGEA_DEFINED_BITWISE_OPERATOR
+#endif
+
+#ifndef DEFINE_ASSIGNMENT_OPERATOR
+#define DEFINE_ASSIGNMENT_OPERATOR(name, spelling) \
+    DEFINE_OPERATOR(name, spelling)
+#define PANGEA_DEFINED_ASSIGNMENT_OPERATOR
+#endif
+
+#ifndef DEFINE_INCREMENT_OPERATOR
+#define DEFINE_INCREMENT_OPERATOR(name, spelling) \
+    DEFINE_OPERATOR(name, spelling)
+#define PANGEA_DEFINED_INCREMENT_OPERATOR
+#endif
+
+#ifndef DEFINE_ACCESS_OPERATOR
+#define DEFINE_ACCESS_OPERATOR(name, spelling) \
+    DEFINE_OPERATOR(name, spelling)
+#define PANGEA_DEFINED_ACCESS_OPERATOR
+#endif
+
+#ifndef DEFINE_LITERAL
+#define DEFINE_LITERAL(name, spelling) DEFINE_TOKEN(name, spelling, LITERAL)
+#define PANGEA_DEFINED_LITERAL
+#endif
+
+#ifndef DEFINE_IDENTIFIER
+#define DEFINE_IDENTIFIER(name, spelling) \
+    DEFINE_TOKEN(name, spelling, IDENTIFIER)
+#define PANGEA_DEFINED_IDENTIFIER
+#endif
+
+#ifndef DEFINE_KEYWORD
+#define DEFINE_KEYWORD(name, spelling) DEFINE_TOKEN(name, spelling, KEYWORD)
+#define PANGEA_DEFINED_KEYWORD
+#endif
+
+#ifndef DEFINE_PUNCT
+#define DEFINE_PUNCT(name, spelling) DEFINE_TOKEN(name, spelling, PUNCT)
+#define PANGEA_DEFINED_PUNCT
+#endif
+
+#ifndef DEFINE_SPECIAL
+#define DEFINE_SPECIAL(name, spelling) DEFINE_TOKEN(name, spelling, SPECIAL)
+#define PANGEA_DEFINED_SPECIAL
+#endif
+
+// Literals
+
+DEFINE_LITERAL(LITERAL_INTEGER,   nullptr)
+DEFINE_LITERAL(LITERAL_FLOAT,     nullptr)
+DEFINE_LITERAL(LITERAL_STRING,    nullptr)
+DEFINE_LITERAL(LITERAL_C_STRING,  nullptr)
+
+// `true`/`false`/`null` use keyword tokens; there are no LITERAL_BOOL /
+// LITERAL_NULL.
+
+// Identifier
+
+DEFINE_IDENTIFIER(IDENTIFIER,     nullptr)
+
+// Keywords: control flow / declarations
+
+DEFINE_KEYWORD(KW_IF,       "if")
+DEFINE_KEYWORD(KW_ELSE,     "else")
+DEFINE_KEYWORD(KW_FOR,      "for")
+DEFINE_KEYWORD(KW_WHILE,    "while")
+DEFINE_KEYWORD(KW_IN,       "in")
+DEFINE_KEYWORD(KW_SWITCH,   "switch")
+DEFINE_KEYWORD(KW_CASE,     "case")
+DEFINE_KEYWORD(KW_RETURN,   "return")
+
+DEFINE_KEYWORD(KW_LET,      "let")
+DEFINE_KEYWORD(KW_MUT,      "mut")
+DEFINE_KEYWORD(KW_CONST,    "const")
+DEFINE_KEYWORD(KW_TRUE,     "true")
+DEFINE_KEYWORD(KW_FALSE,    "false")
+DEFINE_KEYWORD(KW_NULL,     "null")
+
+DEFINE_KEYWORD(KW_NEW,      "new")
+DEFINE_KEYWORD(KW_DELETE,   "delete")
+
+DEFINE_KEYWORD(KW_IMPORT,   "import")
+DEFINE_KEYWORD(KW_EXPORT,   "export")
+
+// Keywords: functional paradigm
+
+DEFINE_KEYWORD(KW_FN,       "fn")
+DEFINE_KEYWORD(KW_STRUCT,   "struct")
+DEFINE_KEYWORD(KW_ENUM,     "enum")
+
+// Keywords: OOP paradigm
+
+DEFINE_KEYWORD(KW_CLASS,    "class")
+DEFINE_KEYWORD(KW_CONCEPT,  "concept")
+DEFINE_KEYWORD(KW_PUB,      "pub")
+DEFINE_KEYWORD(KW_PRIV,     "priv")
+DEFINE_KEYWORD(KW_OPERATOR, "operator")
+
+// Self stays distinct from the identifier self.
+DEFINE_KEYWORD(KW_SELF,     "Self")
+
+// Keywords: misc / casts
+
+DEFINE_KEYWORD(KW_CAST,        "cast")
+DEFINE_KEYWORD(KW_TRY_CAST,    "try_cast")
+DEFINE_KEYWORD(KW_AS,          "as")
+DEFINE_KEYWORD(KW_TYPE,        "type")
+DEFINE_KEYWORD(KW_UNSAFE,      "unsafe")
+
+// Reserved for now; may be removed soon.
+DEFINE_KEYWORD(KW_LLVM_INLINE, "__llvm_inline__")
+
+// Types: numeric (int)
+
+DEFINE_INT_TYPE(TYPE_I8,  "i8")
+DEFINE_INT_TYPE(TYPE_I16, "i16")
+DEFINE_INT_TYPE(TYPE_I32, "i32")
+DEFINE_INT_TYPE(TYPE_I64, "i64")
+DEFINE_INT_TYPE(TYPE_U8,  "u8")
+DEFINE_INT_TYPE(TYPE_U16, "u16")
+DEFINE_INT_TYPE(TYPE_U32, "u32")
+DEFINE_INT_TYPE(TYPE_U64, "u64")
+
+// Types: numeric (float)
+
+DEFINE_FLOAT_TYPE(TYPE_F32, "f32")
+DEFINE_FLOAT_TYPE(TYPE_F64, "f64")
+
+// Types: pointer-like / indirection
+
+DEFINE_POINTER_TYPE(TYPE_UNIQUE,  "unique")
+DEFINE_POINTER_TYPE(TYPE_SHARED,  "shared")
+DEFINE_POINTER_TYPE(TYPE_WEAK,    "weak")
+DEFINE_POINTER_TYPE(TYPE_FOREIGN, "foreign")
+DEFINE_POINTER_TYPE(TYPE_RAW,     "raw")
+// `ref` and `mut_ref` are type spellings, not binding keywords.
+DEFINE_POINTER_TYPE(TYPE_REF,     "ref")
+DEFINE_POINTER_TYPE(TYPE_MUT_REF, "mut_ref")
+
+// Types: structural
+
+DEFINE_TYPE(TYPE_BOOL,    "bool")
+DEFINE_TYPE(TYPE_STRING,  "string")
+DEFINE_TYPE(TYPE_VOID,    "void")
+DEFINE_TYPE(TYPE_VA_ARGS, "va_args")
+
+// Operators: arithmetic
+
+DEFINE_ARITHMETIC_OPERATOR(OP_PLUS,     "+")
+DEFINE_ARITHMETIC_OPERATOR(OP_MINUS,    "-")
+DEFINE_ARITHMETIC_OPERATOR(OP_MULTIPLY, "*")
+DEFINE_ARITHMETIC_OPERATOR(OP_DIVIDE,   "/")
+DEFINE_ARITHMETIC_OPERATOR(OP_MODULO,   "%")
+DEFINE_ARITHMETIC_OPERATOR(OP_POWER,    "**")
+
+// Operators: assignment
+
+DEFINE_ASSIGNMENT_OPERATOR(OP_ASSIGN,          "=")
+DEFINE_ASSIGNMENT_OPERATOR(OP_PLUS_ASSIGN,     "+=")
+DEFINE_ASSIGNMENT_OPERATOR(OP_MINUS_ASSIGN,    "-=")
+DEFINE_ASSIGNMENT_OPERATOR(OP_MULTIPLY_ASSIGN, "*=")
+DEFINE_ASSIGNMENT_OPERATOR(OP_DIVIDE_ASSIGN,   "/=")
+DEFINE_ASSIGNMENT_OPERATOR(OP_MODULO_ASSIGN,   "%=")
+
+// Operators: comparison
+
+DEFINE_COMPARISON_OPERATOR(OP_EQUAL,         "==")
+DEFINE_COMPARISON_OPERATOR(OP_NOT_EQUAL,     "!=")
+DEFINE_COMPARISON_OPERATOR(OP_LESS,          "<")
+DEFINE_COMPARISON_OPERATOR(OP_LESS_EQUAL,    "<=")
+DEFINE_COMPARISON_OPERATOR(OP_GREATER,       ">")
+DEFINE_COMPARISON_OPERATOR(OP_GREATER_EQUAL, ">=")
+
+// Operators: logical
+
+DEFINE_LOGICAL_OPERATOR(OP_LOGICAL_AND, "&&")
+DEFINE_LOGICAL_OPERATOR(OP_LOGICAL_OR,  "||")
+DEFINE_LOGICAL_OPERATOR(OP_LOGICAL_NOT, "!")
+
+// Operators: bitwise
+
+DEFINE_BITWISE_OPERATOR(OP_BITWISE_AND,         "&")
+DEFINE_BITWISE_OPERATOR(OP_BITWISE_OR,          "|")
+DEFINE_BITWISE_OPERATOR(OP_BITWISE_XOR,         "^")
+DEFINE_BITWISE_OPERATOR(OP_BITWISE_NOT,         "~")
+DEFINE_BITWISE_OPERATOR(OP_BITWISE_LEFT_SHIFT,  "<<")
+DEFINE_BITWISE_OPERATOR(OP_BITWISE_RIGHT_SHIFT, ">>")
+
+// Operators: increment / decrement
+
+DEFINE_INCREMENT_OPERATOR(OP_INCREMENT, "++")
+DEFINE_INCREMENT_OPERATOR(OP_DECREMENT, "--")
+
+// Operators: scope / member access
+
+DEFINE_ACCESS_OPERATOR(OP_SCOPE_RESOLUTION, "::")
+DEFINE_ACCESS_OPERATOR(OP_MEMBER_ACCESS,    ".")
+DEFINE_ACCESS_OPERATOR(OP_ARROW,            "->")
+
+// Punctuation
+
+DEFINE_PUNCT(LEFT_PAREN,    "(")
+DEFINE_PUNCT(RIGHT_PAREN,   ")")
+DEFINE_PUNCT(LEFT_BRACE,    "{")
+DEFINE_PUNCT(RIGHT_BRACE,   "}")
+DEFINE_PUNCT(LEFT_BRACKET,  "[")
+DEFINE_PUNCT(RIGHT_BRACKET, "]")
+DEFINE_PUNCT(SEMICOLON,     ";")
+DEFINE_PUNCT(COMMA,         ",")
+DEFINE_PUNCT(COLON,         ":")
+DEFINE_PUNCT(QUESTION,      "?")
+
+// Synthetic / control
+
+DEFINE_SPECIAL(SPECIAL_NEWLINE, nullptr)
+DEFINE_SPECIAL(SPECIAL_EOF,     nullptr)
+
+// Emitted when the lexer cannot build the requested token.
+DEFINE_SPECIAL(LEX_ERROR,       nullptr)
+
+// ---- Cleanup of file-supplied fallbacks ----
+
+#ifdef PANGEA_DEFINED_INT_TYPE
+#undef DEFINE_INT_TYPE
+#undef PANGEA_DEFINED_INT_TYPE
+#endif
+
+#ifdef PANGEA_DEFINED_FLOAT_TYPE
+#undef DEFINE_FLOAT_TYPE
+#undef PANGEA_DEFINED_FLOAT_TYPE
+#endif
+
+#ifdef PANGEA_DEFINED_POINTER_TYPE
+#undef DEFINE_POINTER_TYPE
+#undef PANGEA_DEFINED_POINTER_TYPE
+#endif
+
+#ifdef PANGEA_DEFINED_TYPE
+#undef DEFINE_TYPE
+#undef PANGEA_DEFINED_TYPE
+#endif
+
+#ifdef PANGEA_DEFINED_ARITHMETIC_OPERATOR
+#undef DEFINE_ARITHMETIC_OPERATOR
+#undef PANGEA_DEFINED_ARITHMETIC_OPERATOR
+#endif
+
+#ifdef PANGEA_DEFINED_COMPARISON_OPERATOR
+#undef DEFINE_COMPARISON_OPERATOR
+#undef PANGEA_DEFINED_COMPARISON_OPERATOR
+#endif
+
+#ifdef PANGEA_DEFINED_LOGICAL_OPERATOR
+#undef DEFINE_LOGICAL_OPERATOR
+#undef PANGEA_DEFINED_LOGICAL_OPERATOR
+#endif
+
+#ifdef PANGEA_DEFINED_BITWISE_OPERATOR
+#undef DEFINE_BITWISE_OPERATOR
+#undef PANGEA_DEFINED_BITWISE_OPERATOR
+#endif
+
+#ifdef PANGEA_DEFINED_ASSIGNMENT_OPERATOR
+#undef DEFINE_ASSIGNMENT_OPERATOR
+#undef PANGEA_DEFINED_ASSIGNMENT_OPERATOR
+#endif
+
+#ifdef PANGEA_DEFINED_INCREMENT_OPERATOR
+#undef DEFINE_INCREMENT_OPERATOR
+#undef PANGEA_DEFINED_INCREMENT_OPERATOR
+#endif
+
+#ifdef PANGEA_DEFINED_ACCESS_OPERATOR
+#undef DEFINE_ACCESS_OPERATOR
+#undef PANGEA_DEFINED_ACCESS_OPERATOR
+#endif
+
+#ifdef PANGEA_DEFINED_OPERATOR
+#undef DEFINE_OPERATOR
+#undef PANGEA_DEFINED_OPERATOR
+#endif
+
+#ifdef PANGEA_DEFINED_LITERAL
+#undef DEFINE_LITERAL
+#undef PANGEA_DEFINED_LITERAL
+#endif
+
+#ifdef PANGEA_DEFINED_IDENTIFIER
+#undef DEFINE_IDENTIFIER
+#undef PANGEA_DEFINED_IDENTIFIER
+#endif
+
+#ifdef PANGEA_DEFINED_KEYWORD
+#undef DEFINE_KEYWORD
+#undef PANGEA_DEFINED_KEYWORD
+#endif
+
+#ifdef PANGEA_DEFINED_PUNCT
+#undef DEFINE_PUNCT
+#undef PANGEA_DEFINED_PUNCT
+#endif
+
+#ifdef PANGEA_DEFINED_SPECIAL
+#undef DEFINE_SPECIAL
+#undef PANGEA_DEFINED_SPECIAL
+#endif
