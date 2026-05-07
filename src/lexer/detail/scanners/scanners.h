@@ -20,8 +20,6 @@ class BracketStack;
 class Emitter;
 class SourceCursor;
 
-// Distinguishes plain "..." literals from c"..." C-string literals;
-// see scan_string.cpp for the difference in pool storage.
 enum class StringKind : uint8_t {
     PANGEA,
     C,
