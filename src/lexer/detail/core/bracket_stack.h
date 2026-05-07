@@ -19,6 +19,10 @@ enum class BracketKind : std::uint8_t {
 
 class BracketStack {
 public:
+    BracketStack() {
+        stack_.reserve(64);
+    }
+
     void push(BracketKind kind) {
         stack_.push_back(kind);
     }
