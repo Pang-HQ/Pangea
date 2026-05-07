@@ -11,7 +11,6 @@
 
 #include <cstdint>
 #include <limits>
-#include <memory_resource>
 #include <vector>
 
 namespace pangea::detail {
