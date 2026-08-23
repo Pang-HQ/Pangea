@@ -28,7 +28,7 @@ form.
 - Most lines should naturally fit within 80 columns.
 - Comments have a hard limit of 80 columns per line.
 - Line wrapping must never reduce readability.
-- A line may exceed tahe limit when breaking it would make the code less clear.
+- A line may exceed the limit when breaking it would make the code less clear.
 - Do not compress code to satisfy a line limit.
 
 ## Modularity
@@ -110,6 +110,14 @@ int *items;
 ```
 
 - This same style applies to references.
+
+- Exception: forwarding references and parameter packs keep the
+  conventional C++ style, with `&&` attached to the type:
+
+```c
+template<typename... Args>
+void make(Args&&... args);
+```
 
 ## Declarations
 
@@ -225,6 +233,8 @@ if (very_long_condition && another_condition)
   expressions.
 - Avoid expressions with hidden side effects.
 - Prefer separating state changes from control flow.
+- Prefer `std::min`, `std::max`, and `std::clamp` over hand-written
+  compare-and-assign clamping.
 
 ## Nesting and guard clauses
 
@@ -381,6 +391,26 @@ TokenType::KW_IF
 * About `constexpr` specifically:
   - `constexpr` functions follow function naming (snake_case)
   - `constexpr` variables follow constant naming (UPPER_CASE)
+
+* About constructors specifically:
+  - If a constructor parameter shadows a public variable (i.e.
+    SourceLocation::line is shadowed by the ctor), do not rename
+    the parameter if it hurts readability.
+
+    Instead, prefer `DISABLE_WSHADOW` and `ENABLE_WSHADOW` macros
+    defined in `src/core/warnings.h` like below:
+```c
+DISABLE_WSHADOW ...
+SourceLocation(std::string_view filename,
+               SourceLine line, ...)
+    : filename(filename),
+      line(line), ... {
+    ...
+}
+ENABLE_WSHADOW
+```
+  - However, if a constructor is simply an initialiser list, aggregate
+    initialisation is preferred.
 
 ## Error handling and early returns
 
